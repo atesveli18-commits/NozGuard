@@ -17,10 +17,10 @@ v_server.listen(v_port, () => {
 });
 
 const v_token = process.env.DISCORD_TOKEN;
-const v_mongoUri = process.env.MONGO_URI;
+const v_mongoUri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/nozguard";
 
-if (!v_token || !v_mongoUri) {
-  console.error("[VedoGuard Hata] .env dosyasında DISCORD_TOKEN veya MONGO_URI bulunamadı. Lütfen .env dosyasını oluşturup bilgilerinizi giriniz.");
+if (!v_token) {
+  console.error("[VedoGuard Hata] .env dosyasında DISCORD_TOKEN bulunamadı. Lütfen DISCORD_TOKEN bilgisini giriniz.");
   process.exit(1);
 }
 

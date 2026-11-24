@@ -1,0 +1,35 @@
+{
+  "guildId": "",
+  "logChannelId": "",
+  "voiceChannelId": "",
+  "ticketCategoryId": "",
+  "staffRoleId": "",
+  "registeredRoleId": "",
+  "unregisteredRoleId": "",
+  "whitelistedUsers": [],
+  "whitelistedRoles": [],
+  "limits": {
+    "ban": {
+      "limit": 3,
+      "windowMs": 10000
+    },
+    "timeout": {
+      "limit": 3,
+      "windowMs": 10000
+    },
+    "channelDelete": {
+      "limit": 2,
+      "windowMs": 10000
+    },
+    "roleDelete": {
+      "limit": 2,
+      "windowMs": 10000
+    },
+    "spam": {
+      "messageThreshold": 5,
+      "windowMs": 3000,
+      "maxWarnings": 2,
+      "timeoutDurationMs": 300000
+    }
+  }
+}

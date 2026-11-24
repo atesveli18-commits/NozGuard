@@ -262,6 +262,22 @@ export class VedoGuardBot {
   }
 
   private registerEvents(): void {
+    this.client.on(Events.Error, (error) => {
+      console.error("[VedoGuard Gateway Error]", error);
+    });
+
+    this.client.on(Events.ShardDisconnect, (event, shardId) => {
+      console.warn(`[VedoGuard Shard ${shardId} Baglanti Kesildi]`, event);
+    });
+
+    this.client.on(Events.ShardReconnecting, (shardId) => {
+      console.log(`[VedoGuard Shard ${shardId} Yeniden Baglaniyor...]`);
+    });
+
+    this.client.on(Events.ShardResume, (shardId, replayedEvents) => {
+      console.log(`[VedoGuard Shard ${shardId} Oturumu Surduruldu] ${replayedEvents} olay.`);
+    });
+
     this.client.once(Events.ClientReady, async () => {
       console.log(`[VedoGuard] ${this.client.user?.tag} aktif ve izlemede.`);
 

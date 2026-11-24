@@ -16,6 +16,18 @@ v_server.listen(v_port, () => {
   console.log(`[VedoGuard Health-Check] Port ${v_port} uzerinde hazir.`);
 });
 
+const v_keepAliveUrl = process.env.RENDER_EXTERNAL_URL || process.env.KEEP_ALIVE_URL;
+if (v_keepAliveUrl) {
+  setInterval(async () => {
+    try {
+      await fetch(v_keepAliveUrl);
+      console.log(`[VedoGuard Keep-Alive] Otomatik ping gonderildi: ${v_keepAliveUrl}`);
+    } catch (err) {
+      console.error("[VedoGuard Keep-Alive] Ping basarisiz:", err);
+    }
+  }, 8 * 60 * 1000);
+}
+
 const v_token = process.env.DISCORD_TOKEN;
 const v_mongoUri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/nozguard";
 

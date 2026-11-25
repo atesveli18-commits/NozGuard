@@ -43,29 +43,27 @@ export class VedoTicketManager {
     const unregRoleMention = this.config.unregisteredRoleId ? `<@&${this.config.unregisteredRoleId}>` : "@Mülakat";
 
     return new VedoContainerBuilder()
-      .setAccentColor(0x5865f2)
+      .setAccentColor(0x2f3136)
       .addTextDisplay(
-        `# 📋 **QUERENCIA MÜLAKAT & KAYIT BAŞVURUSU**\n` +
-        `*Querencia bünyesine katılmak için resmi mülakat sürecini başlatın.*\n\n` +
-        `📌 **Rol Yapılandırması**\n` +
+        `# 🛡️ **QUERENCIA ÖZEL MÜLAKAT SİSTEMİ**\n\n` +
+        `> **Merhaba Querencia Topluluğu,**\n` +
+        `> Sunucumuza katılmak ve yetkili ekibimizle mülakat gerçekleştirmek için aşağıdaki butonu kullanarak başvurunuzu iletebilirsiniz.\n` +
+        `>\n` +
+        `> 👑 **Onay Sonrası Üye Rolü:** ${regRoleMention}\n` +
         `> 🛡️ **Başlangıç Rolü:** ${unregRoleMention}\n` +
-        `> 👑 **Onay Sonrası Üye Rolü:** ${regRoleMention}\n\n` +
-        `⏱️ **Mülakat Süreci Nasıl İşler?**\n` +
-        `• Aşağıdaki **Mülakat Başvurusu Yap** butonuna tıklayarak açılan formu doldurunuz.\n` +
-        `• Form gönderildiğinde size özel bir mülakat kanalı açılır.\n` +
-        `• Yetkili ekibimiz başvurunuzu onayladığında ${unregRoleMention} rolünüz alınıp ${regRoleMention} rolünüz otomatik olarak verilir.`
+        `────────────────────────────────────────\n` +
+        `> 📌 *Başvuru butonuna tıkladıktan sonra açılan formu eksiksiz doldurunuz. Adınıza özel mülakat odası otomatik olarak oluşturulacaktır.*`
       )
-      .addSeparator(true, 1)
       .addActionRow([
         {
           type: 2,
-          style: 3,
+          style: 2,
           label: "Mülakat Başvurusu Yap",
           custom_id: "vedo_ticket_apply_btn",
           emoji: { name: "📝" }
         }
       ])
-      .setFooter("VedoGuard UI V2 Querencia Kayıt Sistemi");
+      .setFooter("Made by Noz");
   }
 
   public async showApplicationModal(interaction: ButtonInteraction): Promise<void> {
@@ -107,19 +105,11 @@ export class VedoTicketManager {
       .setPlaceholder("Kabul Ediyorum / Etmiyorum")
       .setRequired(true);
 
-    const ckInput = new TextInputBuilder()
-      .setCustomId("vedo_ticket_field_ck")
-      .setLabel("Legal Ekipten Çıkışta CK Kabulü")
-      .setStyle(TextInputStyle.Short)
-      .setPlaceholder("Kabul Ediyorum / Etmiyorum")
-      .setRequired(true);
-
     modal.addComponents(
       new ActionRowBuilder<TextInputBuilder>().addComponents(nameInput),
       new ActionRowBuilder<TextInputBuilder>().addComponents(ageInput),
       new ActionRowBuilder<TextInputBuilder>().addComponents(hoursInput),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(strikeInput),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(ckInput)
+      new ActionRowBuilder<TextInputBuilder>().addComponents(strikeInput)
     );
 
     try {
@@ -141,7 +131,6 @@ export class VedoTicketManager {
     const oocAge = interaction.fields.getTextInputValue("vedo_ticket_field_age");
     const primeHours = interaction.fields.getTextInputValue("vedo_ticket_field_hours");
     const strikeAccept = interaction.fields.getTextInputValue("vedo_ticket_field_strike");
-    const ckAccept = interaction.fields.getTextInputValue("vedo_ticket_field_ck");
 
     try {
       if (!interaction.replied && !interaction.deferred) {
@@ -196,22 +185,19 @@ export class VedoTicketManager {
     });
 
     const ticketContainer = new VedoContainerBuilder()
-      .setAccentColor(0x5865f2)
+      .setAccentColor(0x2f3136)
       .addTextDisplay(
         `# 📋 **YENİ MÜLAKAT BAŞVURUSU**\n` +
-        `**Aday Bilgisi:** <@${user.id}> (\`${user.tag}\`)\n` +
-        `**Gönderilme Tarihi:** <t:${Math.floor(Date.now() / 1000)}:R>`
+        `> 👤 **Aday Bilgisi:** <@${user.id}> (\`${user.tag}\`)\n` +
+        `> 🕒 **Gönderilme Tarihi:** <t:${Math.floor(Date.now() / 1000)}:R>\n` +
+        `────────────────────────────────────────\n` +
+        `> 👤 **OOC İsim:** \`${oocName}\`\n` +
+        `> 🎂 **OOC Yaş:** \`${oocAge}\`\n` +
+        `> ⏰ **Prime Saatler (20:00 - 00:00):** \`${primeHours}\`\n` +
+        `> ⚡ **3 Strike Atılma Kuralı:** \`${strikeAccept}\`\n` +
+        `────────────────────────────────────────\n` +
+        `> ℹ️ *Aşağıdaki butonları kullanarak adayı onaylayabilir, reddedebilir veya odayı silebilirsiniz.*`
       )
-      .addSeparator(true, 1)
-      .addTextDisplay(
-        `👤 **OOC İsim:** \`${oocName}\`\n` +
-        `🎂 **OOC Yaş:** \`${oocAge}\`\n` +
-        `⏰ **Prime Saatler (20:00 - 00:00):** \`${primeHours}\`\n` +
-        `⚡ **3 Strike Atılma Kuralı:** \`${strikeAccept}\`\n` +
-        `⚖️ **Legal Ekip Sonrası CK:** \`${ckAccept}\``
-      )
-      .addSeparator(true, 1)
-      .addTextDisplay(`ℹ️ *Aşağıdaki butonları kullanarak adayı onaylayabilir, reddedebilir veya odayı kapatabilirsiniz.*`)
       .addActionRow([
         {
           type: 2,
@@ -230,12 +216,12 @@ export class VedoTicketManager {
         {
           type: 2,
           style: 2,
-          label: "Talebi Kapat",
+          label: "Odayı Sil",
           custom_id: "vedo_ticket_close_btn",
           emoji: { name: "🔒" }
         }
       ])
-      .setFooter("VedoGuard UI V2 Mülakat Değerlendirme");
+      .setFooter("Made by Noz");
 
     const staffMention = this.config.staffRoleId ? `<@&${this.config.staffRoleId}>` : "Yetkililer";
     const ticketReply = ticketContainer.toReply();
@@ -246,8 +232,12 @@ export class VedoTicketManager {
 
     const replyContainer = new VedoContainerBuilder()
       .setAccentColor(0x57f287)
-      .addTextDisplay(`## ✅ Başvurunuz Alındı\nMülakat kanalınız oluşturuldu: <#${ticketChannel.id}>`)
-      .setFooter("VedoGuard UI V2 Kayıt Sistemi");
+      .addTextDisplay(
+        `# ✅ **BAŞVURUNUZ ALINDI**\n` +
+        `> 📁 Mülakat odanız oluşturuldu: <#${ticketChannel.id}>\n` +
+        `> ℹ️ *Yetkililerimiz en kısa sürede odanızda sizinle iletişime geçecektir.*`
+      )
+      .setFooter("Made by Noz");
 
     try {
       await interaction.editReply(replyContainer.toReply());
@@ -314,14 +304,15 @@ export class VedoTicketManager {
       const approveContainer = new VedoContainerBuilder()
         .setAccentColor(0x57f287)
         .addTextDisplay(
-          `## 🎉 **MÜLAKAT BAŞARIYLA ONAYLANDI**\n` +
-          `<@${targetUserId}> mülakat sürecini başarıyla geçmiştir.\n` +
-          `• ${unregRoleMention} rolü kaldırıldı.\n` +
-          `• ${regRoleMention} üye rolü başarıyla teslim edildi.\n\n` +
-          `**Onaylayan Yetkili:** <@${interaction.user.id}>\n` +
-          `**İşlem Tarihi:** <t:${Math.floor(Date.now() / 1000)}:R>`
+          `# 🎉 **MÜLAKAT BAŞARIYLA ONAYLANDI**\n` +
+          `> 👤 **Onaylanan Üye:** <@${targetUserId}>\n` +
+          `> 👮 **Onaylayan Yetkili:** <@${interaction.user.id}>\n` +
+          `> 🕒 **İşlem Zamanı:** <t:${Math.floor(Date.now() / 1000)}:R>\n` +
+          `────────────────────────────────────────\n` +
+          `> 🛡️ ${unregRoleMention} rolü geri alındı.\n` +
+          `> 👑 ${regRoleMention} üye rolü teslim edildi.`
         )
-        .setFooter("VedoGuard UI V2 Querencia Mülakat Sistemi");
+        .setFooter("Made by Noz");
 
       try {
         if (!interaction.replied && !interaction.deferred) {
@@ -339,12 +330,14 @@ export class VedoTicketManager {
       const rejectContainer = new VedoContainerBuilder()
         .setAccentColor(0xed4245)
         .addTextDisplay(
-          `## ❌ **MÜLAKAT BAŞVURUSU REDDEDİLDİ**\n` +
-          `<@${targetUserId}> mülakat başvurusu yetkili tarafından reddedilmiştir.\n\n` +
-          `**Reddeden Yetkili:** <@${interaction.user.id}>\n` +
-          `**İşlem Tarihi:** <t:${Math.floor(Date.now() / 1000)}:R>`
+          `# ❌ **MÜLAKAT BAŞVURUSU REDDEDİLDİ**\n` +
+          `> 👤 **Aday:** <@${targetUserId}>\n` +
+          `> 👮 **Reddeden Yetkili:** <@${interaction.user.id}>\n` +
+          `> 🕒 **İşlem Zamanı:** <t:${Math.floor(Date.now() / 1000)}:R>\n` +
+          `────────────────────────────────────────\n` +
+          `> ⚠️ *Başvuru yetkili incelemesi sonucunda olumsuz değerlendirilmiştir.*`
         )
-        .setFooter("VedoGuard UI V2 Mülakat Sistemi");
+        .setFooter("Made by Noz");
 
       try {
         if (!interaction.replied && !interaction.deferred) {

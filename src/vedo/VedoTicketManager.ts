@@ -30,6 +30,14 @@ export class VedoTicketManager {
     this.config = config;
   }
 
+  public updateConfig(newConfig: Partial<IVedoTicketConfig>): void {
+    this.config = { ...this.config, ...newConfig };
+  }
+
+  public getConfig(): IVedoTicketConfig {
+    return this.config;
+  }
+
   public getPanelContainer(): VedoContainerBuilder {
     const regRoleMention = this.config.registeredRoleId ? `<@&${this.config.registeredRoleId}>` : "@querencia";
     const unregRoleMention = this.config.unregisteredRoleId ? `<@&${this.config.unregisteredRoleId}>` : "@Mülakat";

@@ -32,6 +32,22 @@ export class VedoSpamGuard {
     this.timeoutDurationMs = timeoutDurationMs;
   }
 
+  public addWhitelistedUser(id: string): void {
+    this.whitelistedUsers.add(id);
+  }
+
+  public removeWhitelistedUser(id: string): void {
+    this.whitelistedUsers.delete(id);
+  }
+
+  public addWhitelistedRole(id: string): void {
+    this.whitelistedRoles.add(id);
+  }
+
+  public removeWhitelistedRole(id: string): void {
+    this.whitelistedRoles.delete(id);
+  }
+
   public isWhitelisted(member: GuildMember): boolean {
     if (member.id === member.guild.ownerId) {
       return true;
@@ -71,7 +87,19 @@ export class VedoSpamGuard {
       state.warnings += 1;
 
       try {
-        await message.delete();
+        if ("messages" in message.channel && "bulkDelete" in message.channel) {
+          const recentMsgs = await message.channel.messages.fetch({ limit: 30 }).catch(() => null);
+          if (recentMsgs) {
+            const userSpamMsgs = recentMsgs.filter(
+              (m) => m.author.id === userId && now - m.createdTimestamp < 60000
+            );
+            if (userSpamMsgs.size > 0) {
+              await message.channel.bulkDelete(userSpamMsgs, true).catch(() => {});
+            }
+          }
+        } else {
+          await message.delete().catch(() => {});
+        }
       } catch {}
 
       if (state.warnings >= this.maxWarnings) {

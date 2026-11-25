@@ -24,6 +24,26 @@ export class VedoAuditGuard {
     this.logChannelId = logChannelId;
   }
 
+  public updateLogChannel(channelId: string): void {
+    this.logChannelId = channelId;
+  }
+
+  public addWhitelistedUser(id: string): void {
+    this.whitelistedUsers.add(id);
+  }
+
+  public removeWhitelistedUser(id: string): void {
+    this.whitelistedUsers.delete(id);
+  }
+
+  public addWhitelistedRole(id: string): void {
+    this.whitelistedRoles.add(id);
+  }
+
+  public removeWhitelistedRole(id: string): void {
+    this.whitelistedRoles.delete(id);
+  }
+
   public isWhitelisted(member: GuildMember): boolean {
     if (member.id === member.guild.ownerId) {
       return true;

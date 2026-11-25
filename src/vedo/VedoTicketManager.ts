@@ -31,17 +31,21 @@ export class VedoTicketManager {
   }
 
   public getPanelContainer(): VedoContainerBuilder {
+    const regRoleMention = this.config.registeredRoleId ? `<@&${this.config.registeredRoleId}>` : "@querencia";
+    const unregRoleMention = this.config.unregisteredRoleId ? `<@&${this.config.unregisteredRoleId}>` : "@Mülakat";
+
     return new VedoContainerBuilder()
       .setAccentColor(0x5865f2)
       .addTextDisplay(
-        `# 📋 **MÜLAKAT & KAYIT BAŞVURUSU**\n` +
-        `*Sunucumuza ve ekibimize katılmak için resmi mülakat sürecini başlatın.*\n\n` +
-        `📌 **Başvuru Bilgilendirmesi**\n` +
-        `Mülakat aşamasına geçebilmek için aşağıdaki **Başvuru Yap** butonuna tıklayarak açılan 5 soruluk formu eksiksiz ve doğru şekilde doldurunuz.\n\n` +
-        `⏱️ **Süreç Nasıl İlerler?**\n` +
-        `• Formu gönderdiğiniz an yalnızca sizin ve yetkili ekibimizin görebileceği **Özel Mülakat Odası** açılır.\n` +
-        `• Yetkililerimiz başvurunuzu değerlendirip odanızda sizinle iletişime geçer.\n` +
-        `• Onaylandığınız takdirde mülakat rolünüz alınıp üye rolünüz tanımlanır.`
+        `# 📋 **QUERENCIA MÜLAKAT & KAYIT BAŞVURUSU**\n` +
+        `*Querencia bünyesine katılmak için resmi mülakat sürecini başlatın.*\n\n` +
+        `📌 **Rol Yapılandırması**\n` +
+        `> 🛡️ **Başlangıç Rolü:** ${unregRoleMention}\n` +
+        `> 👑 **Onay Sonrası Üye Rolü:** ${regRoleMention}\n\n` +
+        `⏱️ **Mülakat Süreci Nasıl İşler?**\n` +
+        `• Aşağıdaki **Mülakat Başvurusu Yap** butonuna tıklayarak açılan formu doldurunuz.\n` +
+        `• Form gönderildiğinde size özel bir mülakat kanalı açılır.\n` +
+        `• Yetkili ekibimiz başvurunuzu onayladığında ${unregRoleMention} rolünüz alınıp ${regRoleMention} rolünüz otomatik olarak verilir.`
       )
       .addSeparator(true, 1)
       .addActionRow([
@@ -53,7 +57,7 @@ export class VedoTicketManager {
           emoji: { name: "📝" }
         }
       ])
-      .setFooter("VedoGuard UI V2 Kayıt & Denetim Sistemi");
+      .setFooter("VedoGuard UI V2 Querencia Kayıt Sistemi");
   }
 
   public async showApplicationModal(interaction: ButtonInteraction): Promise<void> {
@@ -296,17 +300,20 @@ export class VedoTicketManager {
         }
       }
 
+      const regRoleMention = this.config.registeredRoleId ? `<@&${this.config.registeredRoleId}>` : "@querencia";
+      const unregRoleMention = this.config.unregisteredRoleId ? `<@&${this.config.unregisteredRoleId}>` : "@Mülakat";
+
       const approveContainer = new VedoContainerBuilder()
         .setAccentColor(0x57f287)
         .addTextDisplay(
           `## 🎉 **MÜLAKAT BAŞARIYLA ONAYLANDI**\n` +
           `<@${targetUserId}> mülakat sürecini başarıyla geçmiştir.\n` +
-          `• Mülakat Rolü kaldırıldı.\n` +
-          `• Üye Rolü teslim edildi.\n\n` +
+          `• ${unregRoleMention} rolü kaldırıldı.\n` +
+          `• ${regRoleMention} üye rolü başarıyla teslim edildi.\n\n` +
           `**Onaylayan Yetkili:** <@${interaction.user.id}>\n` +
           `**İşlem Tarihi:** <t:${Math.floor(Date.now() / 1000)}:R>`
         )
-        .setFooter("VedoGuard UI V2 Mülakat Sistemi");
+        .setFooter("VedoGuard UI V2 Querencia Mülakat Sistemi");
 
       try {
         if (!interaction.replied && !interaction.deferred) {

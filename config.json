@@ -1,11 +1,11 @@
 {
-  "guildId": "",
-  "logChannelId": "",
-  "voiceChannelId": "",
-  "ticketCategoryId": "",
-  "staffRoleId": "",
-  "registeredRoleId": "",
-  "unregisteredRoleId": "",
+  "guildId": "1574831485385572422",
+  "logChannelId": "1574839308458664136",
+  "voiceChannelId": "1574849200510992474",
+  "ticketCategoryId": "1574831485909991614",
+  "staffRoleId": "1574860001510432778",
+  "registeredRoleId": "1574857531069567079",
+  "unregisteredRoleId": "1574857475444838522",
   "whitelistedUsers": [],
   "whitelistedRoles": [],
   "limits": {

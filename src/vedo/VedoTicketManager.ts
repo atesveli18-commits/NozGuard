@@ -39,7 +39,7 @@ export class VedoTicketManager {
   }
 
   public getPanelContainer(): VedoContainerBuilder {
-    const regRoleMention = this.config.registeredRoleId ? `<@&${this.config.registeredRoleId}>` : "@querencia";
+    const regRoleMention = this.config.registeredRoleId ? `<@&${this.config.registeredRoleId}>` : "@Querencia";
     const unregRoleMention = this.config.unregisteredRoleId ? `<@&${this.config.unregisteredRoleId}>` : "@Mülakat";
 
     return new VedoContainerBuilder()
@@ -51,6 +51,13 @@ export class VedoTicketManager {
         `>\n` +
         `> 👑 **Onay Sonrası Üye Rolü:** ${regRoleMention}\n` +
         `> 🛡️ **Başlangıç Rolü:** ${unregRoleMention}\n` +
+        `────────────────────────────────────────\n` +
+        `> 📋 **Mülakat Başvuru Formunda İstenen Bilgiler:**\n` +
+        `> • **OOC İSİM**\n` +
+        `> • **OOC YAŞ**\n` +
+        `> • **Prime Saatler Oyunda mısınız? (20.00 - 12.00)**\n` +
+        `> • **3 Strike Atılma Kuralı Kabulü**\n` +
+        `> • **K/DA**\n` +
         `────────────────────────────────────────\n` +
         `> 📌 *Başvuru butonuna tıkladıktan sonra açılan formu eksiksiz doldurunuz. Adınıza özel mülakat odası otomatik olarak oluşturulacaktır.*`
       )
@@ -93,7 +100,7 @@ export class VedoTicketManager {
 
     const hoursInput = new TextInputBuilder()
       .setCustomId("vedo_ticket_field_hours")
-      .setLabel("Prime Saatlerde Rolde misiniz? (20.00-00.00)")
+      .setLabel("Prime Saatler Oyunda mısınız? 20.00 12.00")
       .setStyle(TextInputStyle.Short)
       .setPlaceholder("Evet / Hayır")
       .setRequired(true);
@@ -105,11 +112,20 @@ export class VedoTicketManager {
       .setPlaceholder("Kabul Ediyorum / Etmiyorum")
       .setRequired(true);
 
+    const kdaInput = new TextInputBuilder()
+      .setCustomId("vedo_ticket_field_kda")
+      .setLabel("K/DA")
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder("K/DA bilginiz")
+      .setRequired(true)
+      .setMaxLength(16);
+
     modal.addComponents(
       new ActionRowBuilder<TextInputBuilder>().addComponents(nameInput),
       new ActionRowBuilder<TextInputBuilder>().addComponents(ageInput),
       new ActionRowBuilder<TextInputBuilder>().addComponents(hoursInput),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(strikeInput)
+      new ActionRowBuilder<TextInputBuilder>().addComponents(strikeInput),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(kdaInput)
     );
 
     try {
@@ -131,6 +147,7 @@ export class VedoTicketManager {
     const oocAge = interaction.fields.getTextInputValue("vedo_ticket_field_age");
     const primeHours = interaction.fields.getTextInputValue("vedo_ticket_field_hours");
     const strikeAccept = interaction.fields.getTextInputValue("vedo_ticket_field_strike");
+    const kda = interaction.fields.getTextInputValue("vedo_ticket_field_kda");
 
     try {
       if (!interaction.replied && !interaction.deferred) {
@@ -193,8 +210,9 @@ export class VedoTicketManager {
         `────────────────────────────────────────\n` +
         `> 👤 **OOC İsim:** \`${oocName}\`\n` +
         `> 🎂 **OOC Yaş:** \`${oocAge}\`\n` +
-        `> ⏰ **Prime Saatler (20:00 - 00:00):** \`${primeHours}\`\n` +
+        `> ⏰ **Prime Saatler (20:00 - 12:00):** \`${primeHours}\`\n` +
         `> ⚡ **3 Strike Atılma Kuralı:** \`${strikeAccept}\`\n` +
+        `> 🎯 **K/DA:** \`${kda}\`\n` +
         `────────────────────────────────────────\n` +
         `> ℹ️ *Aşağıdaki butonları kullanarak adayı onaylayabilir, reddedebilir veya odayı silebilirsiniz.*`
       )

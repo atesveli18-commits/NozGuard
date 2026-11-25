@@ -44,28 +44,31 @@ export class VedoContainerBuilder {
       rawBlocks.push(item);
     }
 
-    if (this.footerText) {
-      rawBlocks.push(`-# 🛡️ *${this.footerText}*`);
-    }
-
     const formattedLines: string[] = [];
     for (let i = 0; i < rawBlocks.length; i++) {
       const block = rawBlocks[i];
       const lines = block.split("\n");
       for (const line of lines) {
-        if (line.trim().length === 0) {
-          formattedLines.push(">");
+        const trimmed = line.trim();
+        if (trimmed.length === 0) {
+          if (formattedLines.length > 0 && formattedLines[formattedLines.length - 1] !== ">") {
+            formattedLines.push(">");
+          }
+        } else if (trimmed.startsWith("-#")) {
+          formattedLines.push(trimmed);
+        } else if (trimmed.startsWith(">")) {
+          formattedLines.push(trimmed);
         } else {
-          formattedLines.push(`> ${line}`);
+          formattedLines.push(`> ${trimmed}`);
         }
       }
-      if (
-        i < rawBlocks.length - 1 &&
-        rawBlocks[i] !== "───────────────────────────────" &&
-        rawBlocks[i + 1] !== "───────────────────────────────"
-      ) {
-        formattedLines.push(">");
+    }
+
+    if (this.footerText) {
+      if (formattedLines.length > 0 && formattedLines[formattedLines.length - 1] === ">") {
+        formattedLines.pop();
       }
+      formattedLines.push(`-# 🛡️ *${this.footerText}*`);
     }
 
     return formattedLines.join("\n");

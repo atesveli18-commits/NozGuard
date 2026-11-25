@@ -25,6 +25,7 @@ import { VedoContainerBuilder } from "./VedoContainerBuilder";
 export interface IVedoGuardConfig {
   guildId: string;
   logChannelId: string;
+  joinLeaveChannelId?: string;
   voiceChannelId?: string;
   ticketCategoryId?: string;
   staffRoleId?: string;
@@ -46,6 +47,13 @@ export interface IVedoGuardConfig {
   };
 }
 
+export interface IVedoMemberEvent {
+  type: "giris" | "cikis";
+  userId: string;
+  userTag: string;
+  timestamp: number;
+}
+
 export class VedoGuardBot {
   public client: Client;
   public voiceManager: VedoVoiceManager;
@@ -54,6 +62,7 @@ export class VedoGuardBot {
   private auditGuard: VedoAuditGuard;
   private spamGuard: VedoSpamGuard;
   private token: string = "";
+  private memberEvents: IVedoMemberEvent[] = [];
 
   constructor(config: IVedoGuardConfig) {
     this.config = config;
@@ -248,6 +257,32 @@ export class VedoGuardBot {
         ),
 
       new SlashCommandBuilder()
+        .setName("giris-cikis")
+        .setDescription("Sunucuya girenleri ve çıkanları görüntüler veya log kanalını ayarlar")
+        .addSubcommand((sub) =>
+          sub
+            .setName("liste")
+            .setDescription("Sunucuya son giren ve çıkan üyelerin listesini görüntüler")
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName("ayarla")
+            .setDescription("Giriş ve çıkış bildirimlerinin otomatik yapılacağı metin kanalını ayarlar")
+            .addChannelOption((opt) =>
+              opt
+                .setName("kanal")
+                .setDescription("Bildirimlerin yapılacağı metin kanalı")
+                .addChannelTypes(ChannelType.GuildText)
+                .setRequired(true)
+            )
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName("kapat")
+            .setDescription("Otomatik giriş ve çıkış bildirimlerini kapatır")
+        ),
+
+      new SlashCommandBuilder()
         .setName("sil")
         .setDescription("Belirtilen miktarda mesajı kanaldan toplu olarak siler")
         .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageMessages)
@@ -327,6 +362,8 @@ export class VedoGuardBot {
         `• \`/guard limitler\` → Aktif güvenlik eşiklerini listeler.\n` +
         `• \`/guard whitelist islem:[ekle/cikar]\` → Muaf kullanıcı/rol tanımlar.\n\n` +
         `🐦 **TOPLULUK & YÖNETİM**\n` +
+        `• \`/giris-cikis liste\` → Son giren ve çıkan üyeleri listeler.\n` +
+        `• \`/giris-cikis ayarla kanal:[#kanal]\` → Otomatik bildirim kanalını belirler.\n` +
         `• \`/tweet mesaj:[metin] gorsel:[resim]\` → X formatında tweet paylaşır.\n` +
         `• \`/sil sayi:[1-100]\` → Kanaldaki mesajları toplu siler.\n` +
         `• \`/ping\` → Bot gecikmesini ölçer.`
@@ -623,6 +660,78 @@ export class VedoGuardBot {
       return;
     }
 
+    if (commandName === "giris-cikis") {
+      const sub = interaction.options.getSubcommand();
+
+      if (sub === "liste") {
+        if (!interaction.guild) return;
+
+        let listContent = "";
+        if (this.memberEvents.length === 0) {
+          listContent = "> ℹ️ *Henüz kaydedilmiş yeni giriş veya çıkış hareketi bulunmuyor.*";
+        } else {
+          listContent = this.memberEvents
+            .map((ev) => {
+              const icon = ev.type === "giris" ? "📥" : "📤";
+              const label = ev.type === "giris" ? "Katıldı" : "Ayrıldı";
+              return `> ${icon} **${label}:** <@${ev.userId}> (\`${ev.userTag}\`) - <t:${Math.floor(ev.timestamp / 1000)}:R>`;
+            })
+            .join("\n");
+        }
+
+        const listContainer = new VedoContainerBuilder()
+          .setAccentColor(0x2f3136)
+          .addTextDisplay(
+            `# 📊 **SUNUCU GİRİŞ & ÇIKIŞ KAYITLARI**\n` +
+            `> 👥 **Toplam Sunucu Üyesi:** \`${interaction.guild.memberCount}\`\n` +
+            `────────────────────────────────────────\n` +
+            listContent +
+            `\n────────────────────────────────────────\n` +
+            `> 🕒 *Son ${this.memberEvents.length} üye hareketi listelenmektedir.*`
+          )
+          .setFooter("Made by Noz");
+
+        await interaction.reply(listContainer.toReply());
+        return;
+      }
+
+      if (sub === "ayarla") {
+        const kanal = interaction.options.getChannel("kanal", true);
+        this.config.joinLeaveChannelId = kanal.id;
+        this.saveConfig();
+
+        const setupContainer = new VedoContainerBuilder()
+          .setAccentColor(0x57f287)
+          .addTextDisplay(
+            `# ⚙️ **GİRİŞ - ÇIKIŞ KANALI AYARLANDI**\n` +
+            `> 📢 **Bildirim Kanalı:** <#${kanal.id}>\n` +
+            `────────────────────────────────────────\n` +
+            `> ℹ️ *Artık sunucuya katılan veya ayrılan tüm üyeler bu kanala otomatik olarak bildirilecektir.*`
+          )
+          .setFooter("Made by Noz");
+
+        await interaction.reply(setupContainer.toReply());
+        return;
+      }
+
+      if (sub === "kapat") {
+        this.config.joinLeaveChannelId = undefined;
+        this.saveConfig();
+
+        const closeContainer = new VedoContainerBuilder()
+          .setAccentColor(0xed4245)
+          .addTextDisplay(
+            `# 🔒 **GİRİŞ - ÇIKIŞ BİLDİRİMLERİ KAPATILDI**\n` +
+            `────────────────────────────────────────\n` +
+            `> ℹ️ *Otomatik giriş ve çıkış bildirimleri devre dışı bırakıldı.*`
+          )
+          .setFooter("Made by Noz");
+
+        await interaction.reply(closeContainer.toReply());
+        return;
+      }
+    }
+
     if (commandName === "kayit-paneli") {
       const panel = this.ticketManager.getPanelContainer();
       await interaction.reply({
@@ -732,8 +841,70 @@ export class VedoGuardBot {
 
     this.client.on(Events.GuildMemberAdd, async (member) => {
       if (member.guild.id !== this.config.guildId) return;
+
+      this.memberEvents.unshift({
+        type: "giris",
+        userId: member.id,
+        userTag: member.user.tag,
+        timestamp: Date.now()
+      });
+      if (this.memberEvents.length > 20) {
+        this.memberEvents.pop();
+      }
+
       if (this.config.unregisteredRoleId) {
         await member.roles.add(this.config.unregisteredRoleId).catch(() => {});
+      }
+
+      if (this.config.joinLeaveChannelId) {
+        const channel = member.guild.channels.cache.get(this.config.joinLeaveChannelId);
+        if (channel && "send" in channel) {
+          const joinContainer = new VedoContainerBuilder()
+            .setAccentColor(0x57f287)
+            .addTextDisplay(
+              `# 📥 **YENİ ÜYE KATILDI**\n` +
+              `> 👤 **Kullanıcı:** <@${member.id}> (\`${member.user.tag}\`)\n` +
+              `> 🕒 **Katılım Zamanı:** <t:${Math.floor(Date.now() / 1000)}:R>\n` +
+              `> 📅 **Hesap Açılış:** <t:${Math.floor(member.user.createdTimestamp / 1000)}:d>\n` +
+              `────────────────────────────────────────\n` +
+              `> 👥 **Toplam Sunucu Üyesi:** \`${member.guild.memberCount}\``
+            )
+            .setFooter("Made by Noz");
+
+          await (channel as TextChannel).send(joinContainer.toReply()).catch(() => {});
+        }
+      }
+    });
+
+    this.client.on(Events.GuildMemberRemove, async (member) => {
+      if (member.guild.id !== this.config.guildId) return;
+
+      this.memberEvents.unshift({
+        type: "cikis",
+        userId: member.id,
+        userTag: member.user.tag,
+        timestamp: Date.now()
+      });
+      if (this.memberEvents.length > 20) {
+        this.memberEvents.pop();
+      }
+
+      if (this.config.joinLeaveChannelId) {
+        const channel = member.guild.channels.cache.get(this.config.joinLeaveChannelId);
+        if (channel && "send" in channel) {
+          const leaveContainer = new VedoContainerBuilder()
+            .setAccentColor(0xed4245)
+            .addTextDisplay(
+              `# 📤 **BİR ÜYE AYRILDI**\n` +
+              `> 👤 **Kullanıcı:** <@${member.id}> (\`${member.user.tag}\`)\n` +
+              `> 🕒 **Ayrılma Zamanı:** <t:${Math.floor(Date.now() / 1000)}:R>\n` +
+              `────────────────────────────────────────\n` +
+              `> 👥 **Kalan Üye Sayısı:** \`${member.guild.memberCount}\``
+            )
+            .setFooter("Made by Noz");
+
+          await (channel as TextChannel).send(leaveContainer.toReply()).catch(() => {});
+        }
       }
     });
 

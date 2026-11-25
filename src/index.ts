@@ -68,6 +68,10 @@ if (process.env.UNREGISTERED_ROLE_ID) {
   v_config.unregisteredRoleId = process.env.UNREGISTERED_ROLE_ID;
 }
 
+if (process.env.JOIN_LEAVE_CHANNEL_ID) {
+  v_config.joinLeaveChannelId = process.env.JOIN_LEAVE_CHANNEL_ID;
+}
+
 const v_bot = new VedoGuardBot(v_config);
 
 process.on("unhandledRejection", (error) => {

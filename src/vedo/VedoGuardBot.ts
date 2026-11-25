@@ -21,6 +21,7 @@ import { VedoDatabase } from "./VedoDatabase";
 import { VedoVoiceManager } from "./VedoVoiceManager";
 import { VedoTicketManager } from "./VedoTicketManager";
 import { VedoContainerBuilder } from "./VedoContainerBuilder";
+import { VedoTweetCard } from "./VedoTweetCard";
 
 export interface IVedoGuardConfig {
   guildId: string;
@@ -632,30 +633,46 @@ export class VedoGuardBot {
       const mesaj = interaction.options.getString("mesaj", true);
       const gorsel = interaction.options.getAttachment("gorsel");
       const member = interaction.member as GuildMember;
-      const displayName = member?.displayName || interaction.user.username;
+      const displayName = member?.displayName || interaction.user.displayName || interaction.user.username;
       const username = interaction.user.username;
+      const avatarUrl = interaction.user.displayAvatarURL({ extension: "png", size: 128 });
 
-      const tweetContainer = new VedoContainerBuilder()
-        .setAccentColor(0x1da1f2)
-        .addTextDisplay(
-          `# 🐦 **X (TWITTER)**\n` +
-          `> 👤 **${displayName}** 🔹 \`@${username}\`\n` +
-          `> \n` +
-          `> ${mesaj}\n` +
-          (gorsel ? `> \n> 🖼️ ${gorsel.url}\n` : "") +
-          `> \n` +
-          `> 🕒 <t:${Math.floor(Date.now() / 1000)}:t> · Twitter for FiveM\n` +
-          `> 🔁 1.1K Retweet · 💬 546 Yanıt · ❤️ 5.8K Beğeni · 🔖 318`
-        )
-        .setFooter("Made by Noz");
+      const months = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, "0");
+      const minutes = String(now.getMinutes()).padStart(2, "0");
+      const day = now.getDate();
+      const month = months[now.getMonth()];
+      const year = now.getFullYear();
+      const timeStr = `${hours}:${minutes}`;
+      const dateStr = `${day} ${month} ${year}`;
 
-      await interaction.reply({
-        content: "> ✅ *Tweet'iniz başarıyla paylaşıldı.*",
-        flags: MessageFlags.Ephemeral
-      });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-      if (interaction.channel && "send" in interaction.channel) {
-        await interaction.channel.send(tweetContainer.toReply());
+      try {
+        const imageBuffer = await VedoTweetCard.generate({
+          displayName,
+          username,
+          avatarUrl,
+          text: mesaj,
+          timeStr,
+          dateStr,
+          imageUrl: gorsel?.url
+        });
+
+        if (interaction.channel && "send" in interaction.channel) {
+          await (interaction.channel as TextChannel).send({
+            files: [{ attachment: imageBuffer, name: "tweet.png" }]
+          });
+        }
+
+        await interaction.editReply({
+          content: "> ✅ *Tweet'iniz bire bir X formatında başarıyla paylaşıldı.*"
+        });
+      } catch {
+        await interaction.editReply({
+          content: "> ❌ *Tweet görseli oluşturulurken bir hata meydana geldi.*"
+        });
       }
       return;
     }

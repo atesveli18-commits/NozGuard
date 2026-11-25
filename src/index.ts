@@ -72,6 +72,14 @@ if (process.env.JOIN_LEAVE_CHANNEL_ID) {
   v_config.joinLeaveChannelId = process.env.JOIN_LEAVE_CHANNEL_ID;
 }
 
+if (process.env.AFK_CHANNEL_ID) {
+  v_config.afkChannelId = process.env.AFK_CHANNEL_ID;
+}
+
+if (process.env.AFK_MUTE_ENABLED) {
+  v_config.afkMuteEnabled = process.env.AFK_MUTE_ENABLED === "true";
+}
+
 const v_bot = new VedoGuardBot(v_config);
 
 process.on("unhandledRejection", (error) => {

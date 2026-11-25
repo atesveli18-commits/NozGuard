@@ -28,6 +28,8 @@ export interface IVedoGuardConfig {
   logChannelId: string;
   joinLeaveChannelId?: string;
   voiceChannelId?: string;
+  afkChannelId?: string;
+  afkMuteEnabled?: boolean;
   ticketCategoryId?: string;
   staffRoleId?: string;
   registeredRoleId?: string;
@@ -284,6 +286,29 @@ export class VedoGuardBot {
         ),
 
       new SlashCommandBuilder()
+        .setName("ses")
+        .setDescription("Ses sistemleri ve AFK yönetimi")
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommand((sub) =>
+          sub
+            .setName("afk")
+            .setDescription("AFK odasına giren üyelerin otomatik susturulmasını (mute) ayarlar")
+            .addChannelOption((opt) =>
+              opt
+                .setName("kanal")
+                .setDescription("AFK ses kanalı (boş bırakılırsa sunucunun varsayılan AFK odası kullanılır)")
+                .addChannelTypes(ChannelType.GuildVoice)
+                .setRequired(false)
+            )
+            .addBooleanOption((opt) =>
+              opt
+                .setName("durum")
+                .setDescription("AFK otomatik susturma aktif olsun mu? (Açık: true / Kapalı: false)")
+                .setRequired(false)
+            )
+        ),
+
+      new SlashCommandBuilder()
         .setName("sil")
         .setDescription("Belirtilen miktarda mesajı kanaldan toplu olarak siler")
         .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageMessages)
@@ -362,6 +387,9 @@ export class VedoGuardBot {
         `• \`/guard ayarla\` → Log kanalı, ses odası ve limitleri belirler.\n` +
         `• \`/guard limitler\` → Aktif güvenlik eşiklerini listeler.\n` +
         `• \`/guard whitelist islem:[ekle/cikar]\` → Muaf kullanıcı/rol tanımlar.\n\n` +
+        `🔊 **SES & AFK YÖNETİMİ**\n` +
+        `• \`/ses afk kanal:[#kanal] durum:[Açık/Kapalı]\` → AFK odasındakileri otomatik susturur.\n` +
+        `• \`/ses-paneli\` → 7/24 ses durum panelini gönderir.\n\n` +
         `🐦 **TOPLULUK & YÖNETİM**\n` +
         `• \`/giris-cikis liste\` → Son giren ve çıkan üyeleri listeler.\n` +
         `• \`/giris-cikis ayarla kanal:[#kanal]\` → Otomatik bildirim kanalını belirler.\n` +
@@ -749,6 +777,72 @@ export class VedoGuardBot {
       }
     }
 
+    if (commandName === "ses") {
+      const sub = interaction.options.getSubcommand();
+      if (sub === "afk") {
+        const kanal = interaction.options.getChannel("kanal");
+        const durum = interaction.options.getBoolean("durum");
+
+        if (durum === false) {
+          this.config.afkMuteEnabled = false;
+          this.saveConfig();
+
+          const disableContainer = new VedoContainerBuilder()
+            .setAccentColor(0xed4245)
+            .addTextDisplay(
+              `# 🔇 **AFK SUSTURMA DEVRE DIŞI BIRAKILDI**\n` +
+              `> ⚙️ **Durum:** \`Kapalı\`\n` +
+              `────────────────────────────────────────\n` +
+              `> ℹ️ *Artık AFK odasına geçen kullanıcılar otomatik olarak susturulmayacaktır.*`
+            )
+            .setFooter("Made by Noz");
+
+          await interaction.reply(disableContainer.toReply());
+          return;
+        }
+
+        const targetId = kanal ? kanal.id : this.config.afkChannelId || interaction.guild?.afkChannelId;
+
+        if (!targetId) {
+          await interaction.reply({
+            content: "> ❌ *Sunucuda tanımlı bir Discord AFK odası bulunamadı. Lütfen bir kanal belirtiniz: `/ses afk kanal:[#kanal]`*",
+            flags: MessageFlags.Ephemeral
+          });
+          return;
+        }
+
+        this.config.afkChannelId = targetId;
+        this.config.afkMuteEnabled = true;
+        this.saveConfig();
+
+        let affectedCount = 0;
+        const afkChannel = interaction.guild?.channels.cache.get(targetId);
+        if (afkChannel && afkChannel.isVoiceBased()) {
+          for (const [, voiceMember] of afkChannel.members) {
+            if (!voiceMember.voice.serverMute) {
+              await voiceMember.voice.setMute(true, "VedoGuard AFK Odası Otomatik Susturma").catch(() => {});
+              affectedCount++;
+            }
+          }
+        }
+
+        const successContainer = new VedoContainerBuilder()
+          .setAccentColor(0x57f287)
+          .addTextDisplay(
+            `# 🔇 **AFK OTOMATİK SUSTURMA AKTİF EDİLDİ**\n` +
+            `> 🔊 **AFK Kanalı:** <#${targetId}>\n` +
+            `> ⚙️ **Sistem Durumu:** \`Aktif (Sunucu Geneli Susturma)\`\n` +
+            `> 👥 **Mevcut Susturulan Üye:** \`${affectedCount}\`\n` +
+            `────────────────────────────────────────\n` +
+            `> ℹ️ *Bu odaya geçen veya Discord tarafından AFK'ya atılan tüm kullanıcılar anında otomatik olarak susturulacaktır (Server Mute).*`
+          )
+          .setFooter("Made by Noz");
+
+        await interaction.reply(successContainer.toReply());
+        return;
+      }
+    }
+
     if (commandName === "kayit-paneli") {
       const panel = this.ticketManager.getPanelContainer();
       await interaction.reply({
@@ -968,6 +1062,49 @@ export class VedoGuardBot {
         this.config.limits.roleDelete.limit,
         this.config.limits.roleDelete.windowMs
       );
+    });
+
+    this.client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
+      if (newState.guild.id !== this.config.guildId) return;
+      if (!this.config.afkMuteEnabled) return;
+
+      const targetAfkChannelId = this.config.afkChannelId || newState.guild.afkChannelId;
+      if (!targetAfkChannelId) return;
+
+      if (newState.channelId === targetAfkChannelId) {
+        if (newState.member && !newState.serverMute) {
+          try {
+            await newState.member.voice.setMute(true, "VedoGuard AFK Odası Otomatik Susturma");
+            if (this.config.logChannelId) {
+              const logChannel = newState.guild.channels.cache.get(this.config.logChannelId);
+              if (logChannel && "send" in logChannel) {
+                const logCard = new VedoContainerBuilder()
+                  .setAccentColor(0x2f3136)
+                  .addTextDisplay(
+                    `# 🔇 **AFK OTOMATİK SUSTURMA UYGULANDI**\n` +
+                    `> 👤 **Üye:** <@${newState.member.id}> (\`${newState.member.user.tag}\`)\n` +
+                    `> 🔊 **AFK Odası:** <#${targetAfkChannelId}>\n` +
+                    `> 🕒 **Zaman:** <t:${Math.floor(Date.now() / 1000)}:R>\n` +
+                    `────────────────────────────────────────\n` +
+                    `> ℹ️ *Kullanıcı AFK kanalına girdiği için mikrofonu sunucu genelinde susturuldu.*`
+                  )
+                  .setFooter("Made by Noz");
+                await (logChannel as TextChannel).send(logCard.toReply()).catch(() => {});
+              }
+            }
+          } catch (err) {
+            console.error("[VedoGuard AFK Mute Error]", err);
+          }
+        }
+      } else if (oldState.channelId === targetAfkChannelId && newState.channelId !== null) {
+        if (newState.member && newState.serverMute) {
+          try {
+            await newState.member.voice.setMute(false, "VedoGuard AFK Odasından Çıkış");
+          } catch (err) {
+            console.error("[VedoGuard AFK Unmute Error]", err);
+          }
+        }
+      }
     });
 
     this.client.on(Events.MessageCreate, async (message) => {

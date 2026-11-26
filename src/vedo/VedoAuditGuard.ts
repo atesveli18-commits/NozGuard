@@ -18,15 +18,26 @@ export class VedoAuditGuard {
   private whitelistedUsers: Set<string>;
   private whitelistedRoles: Set<string>;
   private logChannelId: string;
+  private fallbackRoleId?: string;
 
-  constructor(whitelistedUsers: string[], whitelistedRoles: string[], logChannelId: string) {
+  constructor(
+    whitelistedUsers: string[],
+    whitelistedRoles: string[],
+    logChannelId: string,
+    fallbackRoleId?: string
+  ) {
     this.whitelistedUsers = new Set(whitelistedUsers);
     this.whitelistedRoles = new Set(whitelistedRoles);
     this.logChannelId = logChannelId;
+    this.fallbackRoleId = fallbackRoleId;
   }
 
   public updateLogChannel(channelId: string): void {
     this.logChannelId = channelId;
+  }
+
+  public updateFallbackRole(roleId?: string): void {
+    this.fallbackRoleId = roleId;
   }
 
   public addWhitelistedUser(id: string): void {
@@ -123,7 +134,7 @@ export class VedoAuditGuard {
     }
   }
 
-  private async enforceAction(
+  public async enforceAction(
     guild: Guild,
     member: GuildMember,
     actionType: string,
@@ -131,7 +142,7 @@ export class VedoAuditGuard {
     limit: number
   ): Promise<void> {
     const manageableRoles = member.roles.cache.filter(
-      (role) => role.id !== guild.id && role.editable
+      (role) => role.id !== guild.id && role.id !== this.fallbackRoleId && role.editable
     );
 
     try {
@@ -140,15 +151,33 @@ export class VedoAuditGuard {
       }
     } catch {}
 
+    let fallbackAssigned = false;
+    try {
+      if (this.fallbackRoleId) {
+        const fallbackRole = guild.roles.cache.get(this.fallbackRoleId);
+        if (fallbackRole && fallbackRole.editable) {
+          if (!member.roles.cache.has(this.fallbackRoleId)) {
+            await member.roles.add(
+              fallbackRole,
+              `VedoGuard: Yetkiler sıfırlandı, varsayılan üye rolü atandı`
+            );
+          }
+          fallbackAssigned = true;
+        }
+      }
+    } catch {}
+
     await VedoDatabase.logAction(
       member.id,
       actionType,
       guild.id,
       undefined,
-      `Limit aşıldı: ${actionCount}/${limit}`
+      fallbackAssigned
+        ? `Limit aşıldı: ${actionCount}/${limit} (Üye rolü atandı)`
+        : `Limit aşıldı: ${actionCount}/${limit}`
     );
 
-    await this.sendLog(guild, member, actionType, actionCount, limit);
+    await this.sendLog(guild, member, actionType, actionCount, limit, fallbackAssigned);
   }
 
   private async sendLog(
@@ -156,7 +185,8 @@ export class VedoAuditGuard {
     member: GuildMember,
     actionType: string,
     actionCount: number,
-    limit: number
+    limit: number,
+    fallbackAssigned: boolean
   ): Promise<void> {
     const channel = guild.channels.cache.get(this.logChannelId) as TextChannel | undefined;
     if (!channel || !channel.isTextBased()) {
@@ -199,17 +229,22 @@ export class VedoAuditGuard {
         {
           icon: "lock",
           title: "Yaptırım",
-          description: "Tüm yönetici rolleri geri alındı",
+          description: fallbackAssigned
+            ? "Yetkili rolleri alındı, üye rolü verildi"
+            : "Tüm yönetici rolleri geri alındı",
           accent: "#EF4444"
         }
       ]
     });
 
+    const fallbackSuffix =
+      fallbackAssigned && this.fallbackRoleId ? `  •  **Atanan Rol:** <@&${this.fallbackRoleId}>` : "";
+
     const container = new VedoContainerBuilder()
       .setAccentColor(VEDO_THEME_COLORS.danger)
       .setImageBuffer(cardBuffer, "vedo-guard-log.png")
       .addTextDisplay(
-        `› **İhlal Yapan:** <@${member.id}>  •  **Müdahale Zamanı:** <t:${Math.floor(Date.now() / 1000)}:R>`
+        `› **İhlal Yapan:** <@${member.id}>${fallbackSuffix}  •  **Müdahale Zamanı:** <t:${Math.floor(Date.now() / 1000)}:R>`
       )
       .addSeparator(true, 1)
       .setFooter("Made by Noz");

@@ -95,7 +95,8 @@ export class VedoGuardBot {
     this.auditGuard = new VedoAuditGuard(
       this.config.whitelistedUsers,
       this.config.whitelistedRoles,
-      this.config.logChannelId
+      this.config.logChannelId,
+      this.config.registeredRoleId
     );
 
     this.spamGuard = new VedoSpamGuard(
@@ -527,7 +528,7 @@ export class VedoGuardBot {
         {
           icon: "shield",
           title: "Yaptırım Politikası",
-          description: "Roller sıfırlanır ve log bildirilir",
+          description: "Roller alınır, @Querencia rolü verilir",
           accent: "#EF4444"
         }
       ]
@@ -537,7 +538,7 @@ export class VedoGuardBot {
       .setAccentColor(VEDO_THEME_COLORS.gold)
       .setImageBuffer(cardBuffer, "vedo-limitler.png")
       .addTextDisplay(
-        `› *İhlal durumunda yetkili rolleri otomatik olarak alınır ve denetim kaydına işlenir.*`
+        `› *İhlal durumunda yetkili rolleri otomatik olarak alınır, üye rolü (${this.config.registeredRoleId ? `<@&${this.config.registeredRoleId}>` : "@Querencia"}) verilir ve denetim kaydına işlenir.*`
       )
       .addSeparator(true, 1)
       .setFooter("Made by Noz");
@@ -835,6 +836,7 @@ export class VedoGuardBot {
       if (sub === "verilecek-rol") {
         this.config.registeredRoleId = rol.id;
         this.ticketManager.updateConfig({ registeredRoleId: rol.id });
+        this.auditGuard.updateFallbackRole(rol.id);
         this.saveConfig();
 
         const container = new VedoContainerBuilder()
@@ -893,6 +895,7 @@ export class VedoGuardBot {
           staffRoleId: this.config.staffRoleId,
           ticketCategoryId: this.config.ticketCategoryId
         });
+        this.auditGuard.updateFallbackRole(uyeRolu.id);
         this.saveConfig();
 
         const container = new VedoContainerBuilder()

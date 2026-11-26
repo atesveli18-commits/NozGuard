@@ -9,6 +9,7 @@ import {
   Routes,
   SlashCommandBuilder,
   ChatInputCommandInteraction,
+  ButtonInteraction,
   MessageFlags,
   ChannelType,
   TextChannel
@@ -25,6 +26,8 @@ import { VedoTweetCard } from "./VedoTweetCard";
 
 export interface IVedoGuardConfig {
   guildId: string;
+  botOwnerId?: string;
+  botOfflineMode?: boolean;
   logChannelId: string;
   joinLeaveChannelId?: string;
   voiceChannelId?: string;
@@ -309,6 +312,32 @@ export class VedoGuardBot {
         ),
 
       new SlashCommandBuilder()
+        .setName("bot")
+        .setDescription("Bot çevrimdışı (uyku) ve çevrimiçi kontrol komutları (Yalnızca Bot Sahibi)")
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommand((sub) =>
+          sub
+            .setName("durum")
+            .setDescription("Botu çevrimdışı/çevrimiçi yapar veya anlık çalışma durumunu gösterir")
+            .addStringOption((opt) =>
+              opt
+                .setName("islem")
+                .setDescription("Uygulanacak durum işlemi")
+                .setRequired(true)
+                .addChoices(
+                  { name: "Çevrimdışı Yap (Görünmez + Uyku Modu)", value: "kapat" },
+                  { name: "Çevrimiçi Yap (Aktif)", value: "ac" },
+                  { name: "Durum Göster", value: "bilgi" }
+                )
+            )
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName("panel")
+            .setDescription("Butonlu çevrimdışı/çevrimiçi bot kontrol panelini kanala kurar")
+        ),
+
+      new SlashCommandBuilder()
         .setName("sil")
         .setDescription("Belirtilen miktarda mesajı kanaldan toplu olarak siler")
         .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageMessages)
@@ -390,6 +419,9 @@ export class VedoGuardBot {
         `🔊 **SES & AFK YÖNETİMİ**\n` +
         `• \`/ses afk kanal:[#kanal] durum:[Açık/Kapalı]\` → AFK odasındakileri otomatik susturur.\n` +
         `• \`/ses-paneli\` → 7/24 ses durum panelini gönderir.\n\n` +
+        `⚡ **BOT KONTROLÜ (BOT SAHİBİ)**\n` +
+        `• \`/bot durum islem:[kapat/ac/bilgi]\` → Botu çevrimdışı (uyku) veya çevrimiçi yapar.\n` +
+        `• \`/bot panel\` → Butonlu çevrimdışı/çevrimiçi kontrol panelini gönderir.\n\n` +
         `🐦 **TOPLULUK & YÖNETİM**\n` +
         `• \`/giris-cikis liste\` → Son giren ve çıkan üyeleri listeler.\n` +
         `• \`/giris-cikis ayarla kanal:[#kanal]\` → Otomatik bildirim kanalını belirler.\n` +
@@ -400,8 +432,196 @@ export class VedoGuardBot {
       .setFooter("Made by Noz");
   }
 
+  public isBotOwner(userId: string): boolean {
+    if (!this.config.botOwnerId) {
+      return false;
+    }
+    const ownerIds = this.config.botOwnerId
+      .split(",")
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0);
+    return ownerIds.includes(userId);
+  }
+
+  public getBotControlContainer(): VedoContainerBuilder {
+    const isOffline = Boolean(this.config.botOfflineMode);
+    const ownerDisplay = this.config.botOwnerId
+      ? `<@${this.config.botOwnerId.split(",")[0].trim()}>`
+      : "`Tanımlanmadı`";
+    const voiceStatus = isOffline
+      ? "`Uyku Modunda Kapalı`"
+      : this.voiceManager.isConnected()
+        ? "`Bağlı`"
+        : "`Hazır`";
+
+    return new VedoContainerBuilder()
+      .setAccentColor(isOffline ? 0xed4245 : 0x57f287)
+      .addTextDisplay(
+        `# ⚡ **VEDOGUARD BOT KONTROL PANELİ**\n` +
+        `> 📡 **Durum:** ${isOffline ? "🔴 `Çevrimdışı (Görünmez + Uyku Modu)`" : "🟢 `Çevrimiçi (Aktif & Koruma Açık)`"}\n` +
+        `> 🛡️ **Guard & Otomasyon:** ${isOffline ? "`Duraklatıldı`" : "`Aktif`"}\n` +
+        `> 🔊 **7/24 Ses Bağlantısı:** ${voiceStatus}\n` +
+        `> 👑 **Yetkili Sahip:** ${ownerDisplay}\n` +
+        `────────────────────────────────────────\n` +
+        `> ℹ️ *Bu paneldeki butonlar yalnızca tanımlı bot sahibi tarafından kullanılabilir.*`
+      )
+      .addActionRow([
+        {
+          type: 2,
+          style: 4,
+          label: "Çevrimdışı Yap",
+          custom_id: "vedo_bot_offline_btn",
+          emoji: { name: "🔴" },
+          disabled: isOffline
+        },
+        {
+          type: 2,
+          style: 3,
+          label: "Çevrimiçi Yap",
+          custom_id: "vedo_bot_online_btn",
+          emoji: { name: "🟢" },
+          disabled: !isOffline
+        },
+        {
+          type: 2,
+          style: 2,
+          label: "Durumu Yenile",
+          custom_id: "vedo_bot_status_btn",
+          emoji: { name: "🔄" }
+        }
+      ])
+      .setFooter("Made by Noz");
+  }
+
+  private getOwnerOnlyContainer(): VedoContainerBuilder {
+    return new VedoContainerBuilder()
+      .setAccentColor(0xed4245)
+      .addTextDisplay(
+        `# ⛔ **YETKİSİZ İŞLEM**\n` +
+        `> ❌ *Bu komut ve kontrol paneli yalnızca bot sahibi tarafından kullanılabilir.*`
+      )
+      .setFooter("Made by Noz");
+  }
+
+  private getOfflineNoticeContainer(): VedoContainerBuilder {
+    return new VedoContainerBuilder()
+      .setAccentColor(0xed4245)
+      .addTextDisplay(
+        `# 🔴 **BOT ÇEVRİMDIŞI (UYKU MODUNDA)**\n` +
+        `> ℹ️ *Bot şu anda sahibi tarafından çevrimdışı/bakım moduna alınmıştır. Aktif edildiğinde komutlar yeniden çalışacaktır.*`
+      )
+      .setFooter("Made by Noz");
+  }
+
+  public async setOfflineMode(offline: boolean, actorUserId?: string): Promise<void> {
+    this.config.botOfflineMode = offline;
+    this.saveConfig();
+
+    this.client.user?.setPresence({
+      status: offline ? "invisible" : "online",
+      activities: []
+    });
+
+    if (offline) {
+      this.voiceManager.disconnect();
+    } else if (this.config.voiceChannelId) {
+      await this.voiceManager.join(this.config.guildId, this.config.voiceChannelId);
+    }
+
+    if (this.config.logChannelId) {
+      const guild = this.client.guilds.cache.get(this.config.guildId);
+      const logChannel = guild?.channels.cache.get(this.config.logChannelId);
+      if (logChannel && "send" in logChannel) {
+        const logContainer = new VedoContainerBuilder()
+          .setAccentColor(offline ? 0xed4245 : 0x57f287)
+          .addTextDisplay(
+            `# ${offline ? "🔴 **BOT ÇEVRİMDIŞI (UYKU MODU) AKTİF**" : "🟢 **BOT ÇEVRİMİÇİ MODA GEÇTİ**"}\n` +
+            `> ⚙️ **Yeni Durum:** ${offline ? "`Çevrimdışı (Görünmez + Uyku)`" : "`Çevrimiçi (Aktif)`"}\n` +
+            `> 👑 **İşlemi Yapan:** ${actorUserId ? `<@${actorUserId}>` : "`Sistem`"}\n` +
+            `> 🕒 **Zaman:** <t:${Math.floor(Date.now() / 1000)}:R>\n` +
+            `────────────────────────────────────────\n` +
+            `> ℹ️ *${offline ? "Bot görünmez duruma alındı, ses kanalından çıkarıldı ve tüm guard/komut otomasyonları duraklatıldı." : "Bot tekrar çevrimiçi duruma geçti ve tüm guard/ses sistemleri aktifleştirildi."}*`
+          )
+          .setFooter("Made by Noz");
+
+        await (logChannel as TextChannel).send(logContainer.toReply()).catch(() => {});
+      }
+    }
+  }
+
+  private async handleBotPanelButton(interaction: ButtonInteraction): Promise<void> {
+    if (!this.isBotOwner(interaction.user.id)) {
+      await interaction.reply({
+        ...this.getOwnerOnlyContainer().toReply(),
+        flags: MessageFlags.Ephemeral
+      });
+      return;
+    }
+
+    await interaction.deferUpdate();
+
+    if (interaction.customId === "vedo_bot_offline_btn") {
+      await this.setOfflineMode(true, interaction.user.id);
+    } else if (interaction.customId === "vedo_bot_online_btn") {
+      await this.setOfflineMode(false, interaction.user.id);
+    }
+
+    await interaction.editReply(this.getBotControlContainer().toReply());
+  }
+
   private async handleSlashCommand(interaction: ChatInputCommandInteraction): Promise<void> {
     const { commandName } = interaction;
+
+    if (commandName === "bot") {
+      if (!this.isBotOwner(interaction.user.id)) {
+        await interaction.reply({
+          ...this.getOwnerOnlyContainer().toReply(),
+          flags: MessageFlags.Ephemeral
+        });
+        return;
+      }
+
+      const sub = interaction.options.getSubcommand();
+
+      if (sub === "durum") {
+        const islem = interaction.options.getString("islem", true);
+        if (islem === "kapat") {
+          await this.setOfflineMode(true, interaction.user.id);
+        } else if (islem === "ac") {
+          await this.setOfflineMode(false, interaction.user.id);
+        }
+        await interaction.reply({
+          ...this.getBotControlContainer().toReply(),
+          flags: MessageFlags.Ephemeral
+        });
+        return;
+      }
+
+      if (sub === "panel") {
+        const confirmContainer = new VedoContainerBuilder()
+          .setAccentColor(0x57f287)
+          .addTextDisplay("> ✅ *Bot kontrol paneli bu kanala başarıyla gönderildi.*")
+          .setFooter("Made by Noz");
+
+        await interaction.reply({
+          ...confirmContainer.toReply(),
+          flags: MessageFlags.Ephemeral
+        });
+
+        if (interaction.channel && "send" in interaction.channel) {
+          await interaction.channel.send(this.getBotControlContainer().toReply());
+        }
+        return;
+      }
+    }
+
+    if (this.config.botOfflineMode) {
+      await interaction.reply({
+        ...this.getOfflineNoticeContainer().toReply(),
+        flags: MessageFlags.Ephemeral
+      });
+      return;
+    }
 
     if (commandName === "kayit") {
       const sub = interaction.options.getSubcommand();
@@ -938,6 +1158,10 @@ export class VedoGuardBot {
 
     this.client.on(Events.ShardResume, (shardId, replayedEvents) => {
       console.log(`[VedoGuard Shard ${shardId} Oturumu Surduruldu] ${replayedEvents} olay.`);
+      this.client.user?.setPresence({
+        status: this.config.botOfflineMode ? "invisible" : "online",
+        activities: []
+      });
     });
 
     this.client.once(Events.ClientReady, async () => {
@@ -945,12 +1169,18 @@ export class VedoGuardBot {
 
       await this.registerSlashCommands();
 
-      if (this.config.voiceChannelId) {
-        await this.voiceManager.join(this.config.guildId, this.config.voiceChannelId);
+      if (this.config.botOfflineMode) {
+        this.client.user?.setPresence({ status: "invisible", activities: [] });
+      } else {
+        this.client.user?.setPresence({ status: "online", activities: [] });
+        if (this.config.voiceChannelId) {
+          await this.voiceManager.join(this.config.guildId, this.config.voiceChannelId);
+        }
       }
     });
 
     this.client.on(Events.GuildMemberAdd, async (member) => {
+      if (this.config.botOfflineMode) return;
       if (member.guild.id !== this.config.guildId) return;
 
       this.memberEvents.unshift({
@@ -988,6 +1218,7 @@ export class VedoGuardBot {
     });
 
     this.client.on(Events.GuildMemberRemove, async (member) => {
+      if (this.config.botOfflineMode) return;
       if (member.guild.id !== this.config.guildId) return;
 
       this.memberEvents.unshift({
@@ -1020,6 +1251,7 @@ export class VedoGuardBot {
     });
 
     this.client.on(Events.GuildBanAdd, async (ban) => {
+      if (this.config.botOfflineMode) return;
       if (ban.guild.id !== this.config.guildId) return;
       await this.auditGuard.trackAndEnforce(
         ban.guild,
@@ -1030,6 +1262,7 @@ export class VedoGuardBot {
     });
 
     this.client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
+      if (this.config.botOfflineMode) return;
       if (newMember.guild.id !== this.config.guildId) return;
       if (oldMember.communicationDisabledUntilTimestamp !== newMember.communicationDisabledUntilTimestamp) {
         if (newMember.isCommunicationDisabled()) {
@@ -1044,6 +1277,7 @@ export class VedoGuardBot {
     });
 
     this.client.on(Events.ChannelDelete, async (channel) => {
+      if (this.config.botOfflineMode) return;
       if (!channel.isDMBased() && channel.guild.id === this.config.guildId) {
         await this.auditGuard.trackAndEnforce(
           channel.guild,
@@ -1055,6 +1289,7 @@ export class VedoGuardBot {
     });
 
     this.client.on(Events.GuildRoleDelete, async (role) => {
+      if (this.config.botOfflineMode) return;
       if (role.guild.id !== this.config.guildId) return;
       await this.auditGuard.trackAndEnforce(
         role.guild,
@@ -1065,6 +1300,7 @@ export class VedoGuardBot {
     });
 
     this.client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
+      if (this.config.botOfflineMode) return;
       if (newState.guild.id !== this.config.guildId) return;
       if (!this.config.afkMuteEnabled) return;
 
@@ -1108,6 +1344,7 @@ export class VedoGuardBot {
     });
 
     this.client.on(Events.MessageCreate, async (message) => {
+      if (this.config.botOfflineMode) return;
       if (!message.guild || message.author.bot) return;
 
       if (message.content === "!limitler") {
@@ -1131,6 +1368,17 @@ export class VedoGuardBot {
         }
 
         if (interaction.isButton()) {
+          if (interaction.customId.startsWith("vedo_bot_")) {
+            await this.handleBotPanelButton(interaction);
+            return;
+          }
+          if (this.config.botOfflineMode) {
+            await interaction.reply({
+              ...this.getOfflineNoticeContainer().toReply(),
+              flags: MessageFlags.Ephemeral
+            });
+            return;
+          }
           if (interaction.customId.startsWith("vedo_ticket_")) {
             await this.ticketManager.handleButtonInteraction(interaction);
             return;
@@ -1142,6 +1390,13 @@ export class VedoGuardBot {
         }
 
         if (interaction.isModalSubmit()) {
+          if (this.config.botOfflineMode) {
+            await interaction.reply({
+              ...this.getOfflineNoticeContainer().toReply(),
+              flags: MessageFlags.Ephemeral
+            });
+            return;
+          }
           if (interaction.customId === "vedo_ticket_modal_submit") {
             await this.ticketManager.handleModalSubmit(interaction);
             return;

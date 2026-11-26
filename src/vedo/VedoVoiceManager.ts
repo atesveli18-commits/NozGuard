@@ -19,12 +19,14 @@ export class VedoVoiceManager {
   private currentChannelId: string | null = null;
   private joinedTimestamp: number = 0;
   private reconnectAttempts: number = 0;
+  private manualDisconnect: boolean = false;
 
   constructor(client: Client) {
     this.client = client;
   }
 
   public async join(guildId: string, channelId: string): Promise<boolean> {
+    this.manualDisconnect = false;
     const guild = this.client.guilds.cache.get(guildId);
     if (!guild) {
       return false;
@@ -57,6 +59,9 @@ export class VedoVoiceManager {
             entersState(this.connection!, VoiceConnectionStatus.Connecting, 5000)
           ]);
         } catch {
+          if (this.manualDisconnect) {
+            return;
+          }
           if (this.connection) {
             this.connection.destroy();
             this.connection = null;
@@ -68,6 +73,9 @@ export class VedoVoiceManager {
       });
 
       this.connection.on(VoiceConnectionStatus.Destroyed, () => {
+        if (this.manualDisconnect) {
+          return;
+        }
         setTimeout(() => {
           this.reconnect();
         }, 5000);
@@ -79,7 +87,25 @@ export class VedoVoiceManager {
     }
   }
 
+  public disconnect(): void {
+    this.manualDisconnect = true;
+    if (this.connection) {
+      try {
+        this.connection.destroy();
+      } catch {}
+      this.connection = null;
+    }
+    this.joinedTimestamp = 0;
+  }
+
+  public isConnected(): boolean {
+    return this.connection?.state.status === VoiceConnectionStatus.Ready;
+  }
+
   public async reconnect(): Promise<boolean> {
+    if (this.manualDisconnect) {
+      return false;
+    }
     if (!this.currentGuildId || !this.currentChannelId) {
       return false;
     }

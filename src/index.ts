@@ -80,6 +80,14 @@ if (process.env.AFK_MUTE_ENABLED) {
   v_config.afkMuteEnabled = process.env.AFK_MUTE_ENABLED === "true";
 }
 
+if (process.env.BOT_OWNER_ID) {
+  v_config.botOwnerId = process.env.BOT_OWNER_ID;
+}
+
+if (process.env.BOT_OFFLINE_MODE) {
+  v_config.botOfflineMode = process.env.BOT_OFFLINE_MODE === "true";
+}
+
 const v_bot = new VedoGuardBot(v_config);
 
 process.on("unhandledRejection", (error) => {

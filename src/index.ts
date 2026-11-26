@@ -88,6 +88,10 @@ if (process.env.BOT_OFFLINE_MODE) {
   v_config.botOfflineMode = process.env.BOT_OFFLINE_MODE === "true";
 }
 
+if (process.env.BOT_NAME) {
+  v_config.botName = process.env.BOT_NAME;
+}
+
 const v_bot = new VedoGuardBot(v_config);
 
 process.on("unhandledRejection", (error) => {

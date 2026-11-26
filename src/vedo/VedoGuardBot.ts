@@ -29,6 +29,7 @@ import { VedoThemeCard } from "./VedoThemeCard";
 
 export interface IVedoGuardConfig {
   guildId: string;
+  botName?: string;
   botOwnerId?: string;
   botOfflineMode?: boolean;
   botAvatarHash?: string;
@@ -141,6 +142,32 @@ export class VedoGuardBot {
       console.log("[VedoGuard] Bot profil fotoğrafı başarıyla güncellendi.");
     } catch (error) {
       console.error("[VedoGuard] Bot profil fotoğrafı güncellenemedi:", error);
+    }
+  }
+
+  private async syncBotName(): Promise<void> {
+    const targetName = this.config.botName?.trim();
+    if (!targetName) {
+      return;
+    }
+
+    if (this.client.user && this.client.user.username !== targetName) {
+      try {
+        await this.client.user.setUsername(targetName);
+        console.log(`[VedoGuard] Bot kullanıcı adı "${targetName}" olarak güncellendi.`);
+      } catch (error) {
+        console.error("[VedoGuard] Bot kullanıcı adı güncellenemedi:", error);
+      }
+    }
+
+    const guild = this.client.guilds.cache.get(this.config.guildId);
+    if (guild?.members.me && guild.members.me.nickname !== targetName) {
+      try {
+        await guild.members.me.setNickname(targetName);
+        console.log(`[VedoGuard] Bot sunucu takma adı "${targetName}" olarak güncellendi.`);
+      } catch (error) {
+        console.error("[VedoGuard] Bot sunucu takma adı güncellenemedi:", error);
+      }
     }
   }
 
@@ -1392,6 +1419,7 @@ export class VedoGuardBot {
 
       await this.registerSlashCommands();
       await this.syncBotAvatar();
+      await this.syncBotName();
 
       if (this.config.botOfflineMode) {
         this.client.user?.setPresence({ status: "invisible", activities: [] });

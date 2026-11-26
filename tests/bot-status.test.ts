@@ -130,4 +130,9 @@ describe("VedoGuardBot Owner & Offline Control Unit Tests", () => {
 
     expect(pattern.test(lockYaml)).toBe(true);
   });
+
+  it("should configure botName as Querencia Bot in config.json", () => {
+    const configJson = JSON.parse(fs.readFileSync(path.join(process.cwd(), "config.json"), "utf-8"));
+    expect(configJson.botName).toBe("Querencia Bot");
+  });
 });

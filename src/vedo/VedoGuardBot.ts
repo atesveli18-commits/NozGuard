@@ -215,6 +215,27 @@ export class VedoGuardBot {
         ),
 
       new SlashCommandBuilder()
+        .setName("mulakat")
+        .setDescription("Mülakat onayında verilecek ve alınacak rolleri yönetir")
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+        .addSubcommand((sub) =>
+          sub
+            .setName("verilecek-rol")
+            .setDescription("Mülakat kabul edildiğinde adaya verilecek rolü belirler")
+            .addRoleOption((opt) =>
+              opt.setName("rol").setDescription("Onay sonrası verilecek rol").setRequired(true)
+            )
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName("alinacak-rol")
+            .setDescription("Mülakat kabul edildiğinde adaydan alınacak rolü belirler")
+            .addRoleOption((opt) =>
+              opt.setName("rol").setDescription("Onay sonrası alınacak mülakat rolü").setRequired(true)
+            )
+        ),
+
+      new SlashCommandBuilder()
         .setName("ticket")
         .setDescription("Ticket ve mülakat odası yönetim komutları")
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
@@ -499,7 +520,7 @@ export class VedoGuardBot {
         {
           icon: "user",
           title: "Kayıt & Mülakat",
-          description: "/kayit ayarla, kur, bilgi komutları"
+          description: "/mulakat verilecek-rol, alinacak-rol, /kayit"
         },
         {
           icon: "file",
@@ -533,7 +554,7 @@ export class VedoGuardBot {
       .setAccentColor(VEDO_THEME_COLORS.gold)
       .setImageBuffer(cardBuffer, "vedo-yardim.png")
       .addTextDisplay(
-        `› **Kayıt:** \`/kayit ayarla\`, \`/kayit kur\`, \`/kayit bilgi\`\n` +
+        `› **Mülakat & Kayıt:** \`/mulakat verilecek-rol\`, \`/mulakat alinacak-rol\`, \`/kayit kur\`, \`/kayit bilgi\`\n` +
         `› **Ticket:** \`/ticket ayarla\`, \`/ticket kur\`, \`/ticket kapat\`\n` +
         `› **Guard & Ses:** \`/guard ayarla\`, \`/guard limitler\`, \`/guard whitelist\`, \`/ses afk\`, \`/ses-paneli\`\n` +
         `› **Bot & Topluluk:** \`/bot durum\`, \`/bot panel\`, \`/giris-cikis\`, \`/tweet\`, \`/sil\`, \`/ping\``
@@ -757,6 +778,63 @@ export class VedoGuardBot {
     if (this.config.botOfflineMode) {
       await interaction.reply(this.getOfflineNoticeContainer().toEphemeralReply());
       return;
+    }
+
+    if (commandName === "mulakat") {
+      const sub = interaction.options.getSubcommand();
+      const rol = interaction.options.getRole("rol", true);
+
+      if (rol.id === interaction.guildId || ("managed" in rol && rol.managed)) {
+        const invalidContainer = new VedoContainerBuilder()
+          .setAccentColor(VEDO_THEME_COLORS.danger)
+          .addTextDisplay(
+            `### Geçersiz Rol\n` +
+            `› *@everyone veya entegrasyon/bot rolleri mülakat rolü olarak seçilemez.*`
+          )
+          .setFooter("Made by Noz");
+        await interaction.reply(invalidContainer.toEphemeralReply());
+        return;
+      }
+
+      if (sub === "verilecek-rol") {
+        this.config.registeredRoleId = rol.id;
+        this.ticketManager.updateConfig({ registeredRoleId: rol.id });
+        this.saveConfig();
+
+        const container = new VedoContainerBuilder()
+          .setAccentColor(VEDO_THEME_COLORS.success)
+          .addTextDisplay(
+            `### Mülakat Verilecek Rol Güncellendi\n` +
+            `› **Verilecek Rol:** <@&${rol.id}>\n` +
+            `› **Alınacak Rol:** ${this.config.unregisteredRoleId ? `<@&${this.config.unregisteredRoleId}>` : "`Tanımlanmadı`"}\n` +
+            `› *Mülakat kabul edildiğinde adaya bu rol otomatik olarak verilecektir.*`
+          )
+          .addSeparator(true, 1)
+          .setFooter("Made by Noz");
+
+        await interaction.reply(container.toReply());
+        return;
+      }
+
+      if (sub === "alinacak-rol") {
+        this.config.unregisteredRoleId = rol.id;
+        this.ticketManager.updateConfig({ unregisteredRoleId: rol.id });
+        this.saveConfig();
+
+        const container = new VedoContainerBuilder()
+          .setAccentColor(VEDO_THEME_COLORS.success)
+          .addTextDisplay(
+            `### Mülakat Alınacak Rol Güncellendi\n` +
+            `› **Alınacak Rol:** <@&${rol.id}>\n` +
+            `› **Verilecek Rol:** ${this.config.registeredRoleId ? `<@&${this.config.registeredRoleId}>` : "`Tanımlanmadı`"}\n` +
+            `› *Yeni üyelere başlangıçta verilecek ve mülakat kabul edildiğinde adaydan otomatik olarak alınacaktır.*`
+          )
+          .addSeparator(true, 1)
+          .setFooter("Made by Noz");
+
+        await interaction.reply(container.toReply());
+        return;
+      }
     }
 
     if (commandName === "kayit") {

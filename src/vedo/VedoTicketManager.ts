@@ -89,7 +89,7 @@ export class VedoTicketManager {
       .setAccentColor(VEDO_THEME_COLORS.gold)
       .setImageBuffer(cardBuffer, "vedo-mulakat-panel.png")
       .addTextDisplay(
-        `› **Onay Sonrası Üye Rolü:** ${regRoleMention}  •  **Başlangıç Rolü:** ${unregRoleMention}`
+        `› **Verilecek Rol:** ${regRoleMention}  •  **Alınacak Rol:** ${unregRoleMention}`
       )
       .addSeparator(true, 1)
       .addActionRow([
@@ -395,7 +395,7 @@ export class VedoTicketManager {
           `› **Onaylanan Üye:** <@${targetUserId}>\n` +
           `› **Onaylayan Yetkili:** <@${interaction.user.id}>\n` +
           `› **İşlem Zamanı:** <t:${Math.floor(Date.now() / 1000)}:R>\n` +
-          `› **Rol Aktarımı:** ${unregRoleMention} geri alındı — ${regRoleMention} teslim edildi`
+          `› **Rol Aktarımı:** ${unregRoleMention} alındı — ${regRoleMention} verildi`
         )
         .addSeparator(true, 1)
         .setFooter("Made by Noz");

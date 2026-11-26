@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import { MessageFlags } from "discord.js";
 import { VedoGuardBot, IVedoGuardConfig } from "../src/vedo/VedoGuardBot";
 
@@ -106,5 +108,26 @@ describe("VedoGuardBot Owner & Offline Control Unit Tests", () => {
     expect(actionRow.components[0].disabled).toBe(true);
     expect(actionRow.components[1].disabled).toBe(false);
     expect(actionRow.components.every((btn: any) => String(btn.custom_id).startsWith("vedo_bot_"))).toBe(true);
+  });
+
+  it("should contain a valid JPEG bot avatar file at assets/bot-avatar.jpg", () => {
+    const avatarPath = path.join(process.cwd(), "assets", "bot-avatar.jpg");
+    expect(fs.existsSync(avatarPath)).toBe(true);
+
+    const avatarBuffer = fs.readFileSync(avatarPath);
+    expect(avatarBuffer.length).toBeGreaterThan(1000);
+    expect(avatarBuffer[0]).toBe(0xff);
+    expect(avatarBuffer[1]).toBe(0xd8);
+    expect(avatarBuffer[2]).toBe(0xff);
+  });
+
+  it("should keep discord.js specifier synchronized between package.json and pnpm-lock.yaml", () => {
+    const pkgJson = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf-8"));
+    const lockYaml = fs.readFileSync(path.join(process.cwd(), "pnpm-lock.yaml"), "utf-8");
+    const expectedSpecifier = pkgJson.dependencies["discord.js"];
+    const escaped = expectedSpecifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const pattern = new RegExp(`discord\\.js:\\s*\\r?\\n\\s*specifier:\\s*${escaped}`);
+
+    expect(pattern.test(lockYaml)).toBe(true);
   });
 });

@@ -17,6 +17,7 @@ import {
 } from "discord.js";
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import { VedoAuditGuard } from "./VedoAuditGuard";
 import { VedoSpamGuard } from "./VedoSpamGuard";
 import { VedoDatabase } from "./VedoDatabase";
@@ -30,6 +31,7 @@ export interface IVedoGuardConfig {
   guildId: string;
   botOwnerId?: string;
   botOfflineMode?: boolean;
+  botAvatarHash?: string;
   logChannelId: string;
   joinLeaveChannelId?: string;
   voiceChannelId?: string;
@@ -119,6 +121,26 @@ export class VedoGuardBot {
       fs.writeFileSync(configPath, JSON.stringify(this.config, null, 2), "utf-8");
     } catch (error) {
       console.error("[VedoGuard] Config kaydedilemedi:", error);
+    }
+  }
+
+  private async syncBotAvatar(): Promise<void> {
+    const avatarPath = path.join(process.cwd(), "assets", "bot-avatar.jpg");
+    if (!fs.existsSync(avatarPath)) {
+      return;
+    }
+    try {
+      const avatarBuffer = fs.readFileSync(avatarPath);
+      const currentHash = crypto.createHash("sha256").update(avatarBuffer).digest("hex");
+      if (this.config.botAvatarHash === currentHash) {
+        return;
+      }
+      await this.client.user?.setAvatar(avatarBuffer);
+      this.config.botAvatarHash = currentHash;
+      this.saveConfig();
+      console.log("[VedoGuard] Bot profil fotoğrafı başarıyla güncellendi.");
+    } catch (error) {
+      console.error("[VedoGuard] Bot profil fotoğrafı güncellenemedi:", error);
     }
   }
 
@@ -1369,6 +1391,7 @@ export class VedoGuardBot {
       console.log(`[VedoGuard] ${this.client.user?.tag} aktif ve izlemede.`);
 
       await this.registerSlashCommands();
+      await this.syncBotAvatar();
 
       if (this.config.botOfflineMode) {
         this.client.user?.setPresence({ status: "invisible", activities: [] });

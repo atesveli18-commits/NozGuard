@@ -13,7 +13,8 @@ import {
   ButtonInteraction,
   MessageFlags,
   ChannelType,
-  TextChannel
+  TextChannel,
+  Attachment
 } from "discord.js";
 import fs from "fs";
 import path from "path";
@@ -26,6 +27,7 @@ import { VedoTicketManager } from "./VedoTicketManager";
 import { VedoContainerBuilder, VEDO_THEME_COLORS } from "./VedoContainerBuilder";
 import { VedoTweetCard } from "./VedoTweetCard";
 import { VedoThemeCard } from "./VedoThemeCard";
+import { VedoEmojiUploader } from "./VedoEmojiUploader";
 
 export interface IVedoGuardConfig {
   guildId: string;
@@ -335,6 +337,40 @@ export class VedoGuardBot {
         ),
 
       new SlashCommandBuilder()
+        .setName("emojiyukle")
+        .setDescription("Özel emojileri, görsel linklerini veya dosyaları sunucuya toplu olarak yükler")
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageGuildExpressions)
+        .addStringOption((opt) =>
+          opt
+            .setName("emojiler")
+            .setDescription("Yan yana yapıştırılmış özel emojiler veya boşlukla ayrılmış görsel linkleri")
+            .setRequired(false)
+            .setMaxLength(2000)
+        )
+        .addStringOption((opt) =>
+          opt
+            .setName("isim")
+            .setDescription("Dosya veya URL emojileri için özel isim / ön ek")
+            .setRequired(false)
+            .setMaxLength(28)
+        )
+        .addAttachmentOption((opt) =>
+          opt.setName("dosya1").setDescription("Yüklenecek görsel dosyası (1)").setRequired(false)
+        )
+        .addAttachmentOption((opt) =>
+          opt.setName("dosya2").setDescription("Yüklenecek görsel dosyası (2)").setRequired(false)
+        )
+        .addAttachmentOption((opt) =>
+          opt.setName("dosya3").setDescription("Yüklenecek görsel dosyası (3)").setRequired(false)
+        )
+        .addAttachmentOption((opt) =>
+          opt.setName("dosya4").setDescription("Yüklenecek görsel dosyası (4)").setRequired(false)
+        )
+        .addAttachmentOption((opt) =>
+          opt.setName("dosya5").setDescription("Yüklenecek görsel dosyası (5)").setRequired(false)
+        ),
+
+      new SlashCommandBuilder()
         .setName("giris-cikis")
         .setDescription("Sunucuya girenleri ve çıkanları görüntüler veya log kanalını ayarlar")
         .addSubcommand((sub) =>
@@ -545,7 +581,7 @@ export class VedoGuardBot {
         {
           icon: "chat",
           title: "Topluluk & Yönetim",
-          description: "/giris-cikis, /tweet, /sil, /ping"
+          description: "/emojiyukle, /giris-cikis, /tweet, /sil, /ping"
         }
       ]
     });
@@ -557,7 +593,7 @@ export class VedoGuardBot {
         `› **Mülakat & Kayıt:** \`/mulakat verilecek-rol\`, \`/mulakat alinacak-rol\`, \`/kayit kur\`, \`/kayit bilgi\`\n` +
         `› **Ticket:** \`/ticket ayarla\`, \`/ticket kur\`, \`/ticket kapat\`\n` +
         `› **Guard & Ses:** \`/guard ayarla\`, \`/guard limitler\`, \`/guard whitelist\`, \`/ses afk\`, \`/ses-paneli\`\n` +
-        `› **Bot & Topluluk:** \`/bot durum\`, \`/bot panel\`, \`/giris-cikis\`, \`/tweet\`, \`/sil\`, \`/ping\``
+        `› **Bot & Topluluk:** \`/bot durum\`, \`/bot panel\`, \`/emojiyukle\`, \`/giris-cikis\`, \`/tweet\`, \`/sil\`, \`/ping\``
       )
       .addSeparator(true, 1)
       .setFooter("Made by Noz");
@@ -1155,6 +1191,77 @@ export class VedoGuardBot {
         await interaction.reply(container.toReply());
         return;
       }
+    }
+
+    if (commandName === "emojiyukle") {
+      if (!interaction.guild) {
+        return;
+      }
+
+      const botMember = interaction.guild.members.me;
+      if (!botMember?.permissions.has(PermissionsBitField.Flags.ManageGuildExpressions)) {
+        const permContainer = new VedoContainerBuilder()
+          .setAccentColor(VEDO_THEME_COLORS.danger)
+          .addTextDisplay(
+            `### Yetki Eksik\n` +
+            `› *Botun emoji yükleyebilmesi için sunucuda \`İfadeleri Yönet\` yetkisine sahip olması gerekir.*`
+          )
+          .setFooter("Made by Noz");
+        await interaction.reply(permContainer.toEphemeralReply());
+        return;
+      }
+
+      const rawText = interaction.options.getString("emojiler");
+      const customPrefix = interaction.options.getString("isim");
+      const attachmentNames = ["dosya1", "dosya2", "dosya3", "dosya4", "dosya5"];
+      const attachments: Attachment[] = [];
+      for (const fieldName of attachmentNames) {
+        const file = interaction.options.getAttachment(fieldName);
+        if (file) {
+          attachments.push(file);
+        }
+      }
+
+      const { items, truncatedCount } = VedoEmojiUploader.parseInputs(
+        rawText,
+        attachments,
+        customPrefix
+      );
+
+      if (items.length === 0) {
+        const emptyContainer = new VedoContainerBuilder()
+          .setAccentColor(VEDO_THEME_COLORS.warning)
+          .addTextDisplay(
+            `### Geçerli Emoji Bulunamadı\n` +
+            `› *Lütfen en az bir özel emoji (\`<:ad:id>\`), geçerli bir görsel bağlantısı (\`https://...\`) veya görsel dosyası (\`dosya1\`-\`dosya5\`) giriniz.*`
+          )
+          .setFooter("Made by Noz");
+        await interaction.reply(emptyContainer.toEphemeralReply());
+        return;
+      }
+
+      await interaction.deferReply();
+
+      const progressContainer = new VedoContainerBuilder()
+        .setAccentColor(VEDO_THEME_COLORS.gold)
+        .addTextDisplay(
+          `### Toplu Emoji Yükleniyor\n` +
+          `› **Toplam:** \`${items.length}\` emoji işleniyor — *lütfen bekleyiniz.*`
+        )
+        .setFooter("Made by Noz");
+      await interaction.editReply(progressContainer.toEditReply());
+
+      const result = await VedoEmojiUploader.uploadBatch(
+        interaction.guild,
+        items,
+        truncatedCount
+      );
+      const reportContainer = await VedoEmojiUploader.buildResultContainer(
+        interaction.guild,
+        result
+      );
+      await interaction.editReply(reportContainer.toEditReply());
+      return;
     }
 
     if (commandName === "tweet") {

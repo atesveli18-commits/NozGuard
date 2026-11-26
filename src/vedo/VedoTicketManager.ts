@@ -12,7 +12,8 @@ import {
   PermissionsBitField,
   MessageFlags
 } from "discord.js";
-import { VedoContainerBuilder } from "./VedoContainerBuilder";
+import { VedoContainerBuilder, VEDO_THEME_COLORS } from "./VedoContainerBuilder";
+import { VedoThemeCard } from "./VedoThemeCard";
 
 export interface IVedoTicketConfig {
   ticketCategoryId?: string;
@@ -38,36 +39,65 @@ export class VedoTicketManager {
     return this.config;
   }
 
-  public getPanelContainer(): VedoContainerBuilder {
+  public async getPanelContainer(guild?: Guild | null): Promise<VedoContainerBuilder> {
     const regRoleMention = this.config.registeredRoleId ? `<@&${this.config.registeredRoleId}>` : "@Querencia";
     const unregRoleMention = this.config.unregisteredRoleId ? `<@&${this.config.unregisteredRoleId}>` : "@Mülakat";
 
+    const cardBuffer = await VedoThemeCard.generate({
+      title: "ÖZEL MÜLAKAT SİSTEMİ",
+      greeting: "Merhaba Querencia üyeleri,",
+      subtitle: "Sunucumuza katılmak ve yetkili ekibimizle mülakat yapmak için aşağıdaki butondan başvurunuzu iletin.",
+      accentColor: "#D4AF37",
+      watermark: "QUERENCIA",
+      iconUrl: guild?.iconURL({ extension: "png", size: 128 }) || undefined,
+      columns: 3,
+      items: [
+        {
+          icon: "user",
+          title: "OOC İSİM",
+          description: "Başvuruda gerçek isminizi belirtiniz."
+        },
+        {
+          icon: "clock",
+          title: "OOC YAŞ",
+          description: "Yaş bilginizi eksiksiz doldurunuz."
+        },
+        {
+          icon: "bell",
+          title: "Prime Saatler",
+          description: "20.00 - 12.00 arası aktiflik durumu."
+        },
+        {
+          icon: "alert",
+          title: "3 Strike Kuralı",
+          description: "3 Strike atılma kuralı kabul onayı."
+        },
+        {
+          icon: "target",
+          title: "K/DA",
+          description: "Oyun içi K/DA oranınızı paylaşınız."
+        },
+        {
+          icon: "crown",
+          title: "Rol Süreci",
+          description: "Başlangıç ve onay sonrası rol aktarımı."
+        }
+      ]
+    });
+
     return new VedoContainerBuilder()
-      .setAccentColor(0x2f3136)
+      .setAccentColor(VEDO_THEME_COLORS.gold)
+      .setImageBuffer(cardBuffer, "vedo-mulakat-panel.png")
       .addTextDisplay(
-        `# 🛡️ **QUERENCIA ÖZEL MÜLAKAT SİSTEMİ**\n\n` +
-        `> **Merhaba Querencia Topluluğu,**\n` +
-        `> Sunucumuza katılmak ve yetkili ekibimizle mülakat gerçekleştirmek için aşağıdaki butonu kullanarak başvurunuzu iletebilirsiniz.\n` +
-        `>\n` +
-        `> 👑 **Onay Sonrası Üye Rolü:** ${regRoleMention}\n` +
-        `> 🛡️ **Başlangıç Rolü:** ${unregRoleMention}\n` +
-        `────────────────────────────────────────\n` +
-        `> 📋 **Mülakat Başvuru Formunda İstenen Bilgiler:**\n` +
-        `> • **OOC İSİM**\n` +
-        `> • **OOC YAŞ**\n` +
-        `> • **Prime Saatler Oyunda mısınız? (20.00 - 12.00)**\n` +
-        `> • **3 Strike Atılma Kuralı Kabulü**\n` +
-        `> • **K/DA**\n` +
-        `────────────────────────────────────────\n` +
-        `> 📌 *Başvuru butonuna tıkladıktan sonra açılan formu eksiksiz doldurunuz. Adınıza özel mülakat odası otomatik olarak oluşturulacaktır.*`
+        `› **Onay Sonrası Üye Rolü:** ${regRoleMention}  •  **Başlangıç Rolü:** ${unregRoleMention}`
       )
+      .addSeparator(true, 1)
       .addActionRow([
         {
           type: 2,
           style: 2,
           label: "Mülakat Başvurusu Yap",
-          custom_id: "vedo_ticket_apply_btn",
-          emoji: { name: "📝" }
+          custom_id: "vedo_ticket_apply_btn"
         }
       ])
       .setFooter("Made by Noz");
@@ -201,64 +231,93 @@ export class VedoTicketManager {
       permissionOverwrites
     });
 
+    const cardBuffer = await VedoThemeCard.generate({
+      title: "YENİ MÜLAKAT BAŞVURUSU",
+      greeting: "Aday Başvuru Dosyası,",
+      subtitle: "Adayın ilettiği form yanıtları aşağıdadır. Ekibinizle değerlendirip kararınızı veriniz.",
+      accentColor: "#D4AF37",
+      watermark: "QUERENCIA",
+      iconUrl: guild.iconURL({ extension: "png", size: 128 }) || undefined,
+      columns: 3,
+      items: [
+        {
+          icon: "user",
+          title: "Aday",
+          description: user.tag
+        },
+        {
+          icon: "file",
+          title: "OOC İsim",
+          description: oocName
+        },
+        {
+          icon: "clock",
+          title: "OOC Yaş",
+          description: oocAge
+        },
+        {
+          icon: "bell",
+          title: "Prime Saatler (20.00 - 12.00)",
+          description: primeHours
+        },
+        {
+          icon: "alert",
+          title: "3 Strike Kuralı",
+          description: strikeAccept
+        },
+        {
+          icon: "target",
+          title: "K/DA",
+          description: kda
+        }
+      ]
+    });
+
+    const staffMention = this.config.staffRoleId ? `<@&${this.config.staffRoleId}>` : "Yetkililer";
     const ticketContainer = new VedoContainerBuilder()
-      .setAccentColor(0x2f3136)
+      .setHeaderNotice(`${staffMention} <@${user.id}>`)
+      .setAccentColor(VEDO_THEME_COLORS.gold)
+      .setImageBuffer(cardBuffer, "vedo-basvuru-karti.png")
       .addTextDisplay(
-        `# 📋 **YENİ MÜLAKAT BAŞVURUSU**\n` +
-        `> 👤 **Aday Bilgisi:** <@${user.id}> (\`${user.tag}\`)\n` +
-        `> 🕒 **Gönderilme Tarihi:** <t:${Math.floor(Date.now() / 1000)}:R>\n` +
-        `────────────────────────────────────────\n` +
-        `> 👤 **OOC İsim:** \`${oocName}\`\n` +
-        `> 🎂 **OOC Yaş:** \`${oocAge}\`\n` +
-        `> ⏰ **Prime Saatler (20:00 - 12:00):** \`${primeHours}\`\n` +
-        `> ⚡ **3 Strike Atılma Kuralı:** \`${strikeAccept}\`\n` +
-        `> 🎯 **K/DA:** \`${kda}\`\n` +
-        `────────────────────────────────────────\n` +
-        `> ℹ️ *Aşağıdaki butonları kullanarak adayı onaylayabilir, reddedebilir veya odayı silebilirsiniz.*`
+        `› **Aday:** <@${user.id}>  •  **Tarih:** <t:${Math.floor(Date.now() / 1000)}:R>`
       )
+      .addSeparator(true, 1)
       .addActionRow([
         {
           type: 2,
           style: 3,
           label: "Kabul Et",
-          custom_id: `vedo_ticket_approve_${user.id}`,
-          emoji: { name: "✅" }
+          custom_id: `vedo_ticket_approve_${user.id}`
         },
         {
           type: 2,
           style: 4,
           label: "Reddet",
-          custom_id: `vedo_ticket_reject_${user.id}`,
-          emoji: { name: "❌" }
+          custom_id: `vedo_ticket_reject_${user.id}`
         },
         {
           type: 2,
           style: 2,
           label: "Odayı Sil",
-          custom_id: "vedo_ticket_close_btn",
-          emoji: { name: "🔒" }
+          custom_id: "vedo_ticket_close_btn"
         }
       ])
       .setFooter("Made by Noz");
 
-    const staffMention = this.config.staffRoleId ? `<@&${this.config.staffRoleId}>` : "Yetkililer";
-    const ticketReply = ticketContainer.toReply();
-    await ticketChannel.send({
-      content: `${staffMention} <@${user.id}>\n\n${ticketReply.content}`,
-      components: ticketReply.components
-    });
+    await ticketChannel.send(ticketContainer.toReply());
 
     const replyContainer = new VedoContainerBuilder()
-      .setAccentColor(0x57f287)
+      .setAccentColor(VEDO_THEME_COLORS.success)
       .addTextDisplay(
-        `# ✅ **BAŞVURUNUZ ALINDI**\n` +
-        `> 📁 Mülakat odanız oluşturuldu: <#${ticketChannel.id}>\n` +
-        `> ℹ️ *Yetkililerimiz en kısa sürede odanızda sizinle iletişime geçecektir.*`
+        `### Başvurunuz Alındı\n` +
+        `› **Mülakat Odanız:** <#${ticketChannel.id}>\n` +
+        `› *Yetkililerimiz en kısa sürede odanızda sizinle iletişime geçecektir.*`
       )
+      .addSeparator(true, 1)
       .setFooter("Made by Noz");
 
     try {
-      await interaction.editReply(replyContainer.toReply());
+      await interaction.editReply(replyContainer.toEditReply());
     } catch {}
   }
 
@@ -273,12 +332,17 @@ export class VedoTicketManager {
     }
 
     if (interaction.customId === "vedo_ticket_close_btn") {
+      const closingContainer = new VedoContainerBuilder()
+        .setAccentColor(VEDO_THEME_COLORS.warning)
+        .addTextDisplay(
+          `### Oda Kapatılıyor\n` +
+          `› *Bu mülakat odası 5 saniye içerisinde silinecektir.*`
+        )
+        .setFooter("Made by Noz");
+
       try {
         if (!interaction.replied && !interaction.deferred) {
-          await interaction.reply({
-            content: "> 🔒 *Bu mülakat odası 5 saniye içerisinde silinecektir...*",
-            flags: MessageFlags.Ephemeral
-          });
+          await interaction.reply(closingContainer.toEphemeralReply());
         }
       } catch {}
       setTimeout(() => {
@@ -292,12 +356,17 @@ export class VedoTicketManager {
     const isAdmin = member?.permissions.has(PermissionsBitField.Flags.Administrator);
 
     if (!hasStaffRole && !isAdmin && interaction.user.id !== interaction.guild.ownerId) {
+      const deniedContainer = new VedoContainerBuilder()
+        .setAccentColor(VEDO_THEME_COLORS.danger)
+        .addTextDisplay(
+          `### Yetkisiz İşlem\n` +
+          `› *Bu işlemi gerçekleştirmek için mülakat yetkisine sahip olmalısınız.*`
+        )
+        .setFooter("Made by Noz");
+
       try {
         if (!interaction.replied && !interaction.deferred) {
-          await interaction.reply({
-            content: "> ⚠️ *Bu işlemi gerçekleştirmek için mülakat yetkisine sahip olmalısınız.*",
-            flags: MessageFlags.Ephemeral
-          });
+          await interaction.reply(deniedContainer.toEphemeralReply());
         }
       } catch {}
       return;
@@ -320,16 +389,15 @@ export class VedoTicketManager {
       const unregRoleMention = this.config.unregisteredRoleId ? `<@&${this.config.unregisteredRoleId}>` : "@Mülakat";
 
       const approveContainer = new VedoContainerBuilder()
-        .setAccentColor(0x57f287)
+        .setAccentColor(VEDO_THEME_COLORS.success)
         .addTextDisplay(
-          `# 🎉 **MÜLAKAT BAŞARIYLA ONAYLANDI**\n` +
-          `> 👤 **Onaylanan Üye:** <@${targetUserId}>\n` +
-          `> 👮 **Onaylayan Yetkili:** <@${interaction.user.id}>\n` +
-          `> 🕒 **İşlem Zamanı:** <t:${Math.floor(Date.now() / 1000)}:R>\n` +
-          `────────────────────────────────────────\n` +
-          `> 🛡️ ${unregRoleMention} rolü geri alındı.\n` +
-          `> 👑 ${regRoleMention} üye rolü teslim edildi.`
+          `### Mülakat Onaylandı\n` +
+          `› **Onaylanan Üye:** <@${targetUserId}>\n` +
+          `› **Onaylayan Yetkili:** <@${interaction.user.id}>\n` +
+          `› **İşlem Zamanı:** <t:${Math.floor(Date.now() / 1000)}:R>\n` +
+          `› **Rol Aktarımı:** ${unregRoleMention} geri alındı — ${regRoleMention} teslim edildi`
         )
+        .addSeparator(true, 1)
         .setFooter("Made by Noz");
 
       try {
@@ -346,15 +414,15 @@ export class VedoTicketManager {
       const targetUserId = interaction.customId.replace("vedo_ticket_reject_", "");
 
       const rejectContainer = new VedoContainerBuilder()
-        .setAccentColor(0xed4245)
+        .setAccentColor(VEDO_THEME_COLORS.danger)
         .addTextDisplay(
-          `# ❌ **MÜLAKAT BAŞVURUSU REDDEDİLDİ**\n` +
-          `> 👤 **Aday:** <@${targetUserId}>\n` +
-          `> 👮 **Reddeden Yetkili:** <@${interaction.user.id}>\n` +
-          `> 🕒 **İşlem Zamanı:** <t:${Math.floor(Date.now() / 1000)}:R>\n` +
-          `────────────────────────────────────────\n` +
-          `> ⚠️ *Başvuru yetkili incelemesi sonucunda olumsuz değerlendirilmiştir.*`
+          `### Mülakat Başvurusu Reddedildi\n` +
+          `› **Aday:** <@${targetUserId}>\n` +
+          `› **Reddeden Yetkili:** <@${interaction.user.id}>\n` +
+          `› **İşlem Zamanı:** <t:${Math.floor(Date.now() / 1000)}:R>\n` +
+          `› **Durum:** *Yetkili incelemesi sonucunda olumsuz değerlendirildi.*`
         )
+        .addSeparator(true, 1)
         .setFooter("Made by Noz");
 
       try {

@@ -5,7 +5,8 @@ import {
   AuditLogEvent,
   GuildAuditLogsEntry
 } from "discord.js";
-import { VedoContainerBuilder } from "./VedoContainerBuilder";
+import { VedoContainerBuilder, VEDO_THEME_COLORS } from "./VedoContainerBuilder";
+import { VedoThemeCard } from "./VedoThemeCard";
 import { VedoDatabase } from "./VedoDatabase";
 
 interface IVedoAuditTracker {
@@ -169,17 +170,49 @@ export class VedoAuditGuard {
       roleDelete: "Rol Silme Limiti"
     };
 
+    const cardBuffer = await VedoThemeCard.generate({
+      title: "GÜVENLİK MÜDAHALESİ",
+      greeting: "Otomatik Koruma Sistemi,",
+      subtitle: "Sunucu limitlerini aşan yönetici tespit edildi ve yetkileri güvenlik amacıyla sıfırlandı.",
+      accentColor: "#EF4444",
+      watermark: "QUERENCIA",
+      iconUrl: guild.iconURL({ extension: "png", size: 128 }) || undefined,
+      columns: 2,
+      items: [
+        {
+          icon: "alert",
+          title: "İhlal Türü",
+          description: actionNames[actionType] || actionType,
+          accent: "#EF4444"
+        },
+        {
+          icon: "user",
+          title: "Yetkili",
+          description: `${member.user.tag} (${member.id})`
+        },
+        {
+          icon: "bolt",
+          title: "Eylem / Limit",
+          description: `${actionCount} / ${limit} izin verilen`,
+          accent: "#F59E0B"
+        },
+        {
+          icon: "lock",
+          title: "Yaptırım",
+          description: "Tüm yönetici rolleri geri alındı",
+          accent: "#EF4444"
+        }
+      ]
+    });
+
     const container = new VedoContainerBuilder()
-      .setAccentColor(0xed4245)
+      .setAccentColor(VEDO_THEME_COLORS.danger)
+      .setImageBuffer(cardBuffer, "vedo-guard-log.png")
       .addTextDisplay(
-        `# 🛡️ **VEDOGUARD GÜVENLİK MÜDAHALESİ**\n` +
-        `🚨 **Tespit Edilen İhlal:** \`${actionNames[actionType] || actionType}\`\n\n` +
-        `👤 **İhlal Yapan Yetkili:** <@${member.id}> (\`${member.user.tag}\`)\n` +
-        `📊 **Eylem Sayısı:** \`${actionCount}\` / İzin Verilen Limit: \`${limit}\`\n` +
-        `⚖️ **Uygulanan Yaptırım:** \`Tüm yetkili rolleri geri alındı ve izole edildi.\`\n` +
-        `⏱️ **Müdahale Zamanı:** <t:${Math.floor(Date.now() / 1000)}:R>`
+        `› **İhlal Yapan:** <@${member.id}>  •  **Müdahale Zamanı:** <t:${Math.floor(Date.now() / 1000)}:R>`
       )
-      .setFooter("VedoGuard UI V2 Denetim & Koruma Sistemi");
+      .addSeparator(true, 1)
+      .setFooter("Made by Noz");
 
     await channel.send(container.toReply());
   }

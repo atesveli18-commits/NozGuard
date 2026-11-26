@@ -2,6 +2,7 @@ import {
   Client,
   GatewayIntentBits,
   Partials,
+  Guild,
   GuildMember,
   Events,
   PermissionsBitField,
@@ -21,8 +22,9 @@ import { VedoSpamGuard } from "./VedoSpamGuard";
 import { VedoDatabase } from "./VedoDatabase";
 import { VedoVoiceManager } from "./VedoVoiceManager";
 import { VedoTicketManager } from "./VedoTicketManager";
-import { VedoContainerBuilder } from "./VedoContainerBuilder";
+import { VedoContainerBuilder, VEDO_THEME_COLORS } from "./VedoContainerBuilder";
 import { VedoTweetCard } from "./VedoTweetCard";
+import { VedoThemeCard } from "./VedoThemeCard";
 
 export interface IVedoGuardConfig {
   guildId: string;
@@ -381,54 +383,113 @@ export class VedoGuardBot {
     }
   }
 
-  public getLimitsContainer(): VedoContainerBuilder {
+  public async getLimitsContainer(guild?: Guild | null): Promise<VedoContainerBuilder> {
+    const cardBuffer = await VedoThemeCard.generate({
+      title: "SUNUCU KORUMA LİMİTLERİ",
+      greeting: "Querencia Güvenlik Eşiği,",
+      subtitle: "Yetkili kötüye kullanımını ve sohbet saldırılarını engelleyen aktif koruma sınırları.",
+      accentColor: "#D4AF37",
+      watermark: "QUERENCIA",
+      iconUrl: guild?.iconURL({ extension: "png", size: 128 }) || undefined,
+      columns: 3,
+      items: [
+        {
+          icon: "bolt",
+          title: "Ban Limiti",
+          description: `${this.config.limits.ban.limit} Ban / ${this.config.limits.ban.windowMs / 1000} Saniye`
+        },
+        {
+          icon: "clock",
+          title: "Timeout Limiti",
+          description: `${this.config.limits.timeout.limit} Timeout / ${this.config.limits.timeout.windowMs / 1000} Saniye`
+        },
+        {
+          icon: "trash",
+          title: "Kanal Silme",
+          description: `${this.config.limits.channelDelete.limit} Kanal / ${this.config.limits.channelDelete.windowMs / 1000} Saniye`
+        },
+        {
+          icon: "lock",
+          title: "Rol Silme",
+          description: `${this.config.limits.roleDelete.limit} Rol / ${this.config.limits.roleDelete.windowMs / 1000} Saniye`
+        },
+        {
+          icon: "chat",
+          title: "Spam Eşiği",
+          description: `${this.config.limits.spam.messageThreshold} Mesaj / ${this.config.limits.spam.windowMs / 1000}sn — ${this.config.limits.spam.maxWarnings} Uyarı`
+        },
+        {
+          icon: "shield",
+          title: "Yaptırım Politikası",
+          description: "Roller sıfırlanır ve log bildirilir",
+          accent: "#EF4444"
+        }
+      ]
+    });
+
     return new VedoContainerBuilder()
-      .setAccentColor(0x5865f2)
+      .setAccentColor(VEDO_THEME_COLORS.gold)
+      .setImageBuffer(cardBuffer, "vedo-limitler.png")
       .addTextDisplay(
-        `# 🛡️ **VEDOGUARD SUNUCU KORUMA LİMİTLERİ**\n` +
-        `*Sunucuda yetkililerin kötüye kullanımını ve saldırıları önleyen aktif limitler:*\n\n` +
-        `🔨 **Sağlayıcı Ban Limiti:** \`${this.config.limits.ban.limit} Ban / ${this.config.limits.ban.windowMs / 1000} Saniye\`\n` +
-        `⏳ **Zaman Aşımı (Timeout) Limiti:** \`${this.config.limits.timeout.limit} Timeout / ${this.config.limits.timeout.windowMs / 1000} Saniye\`\n` +
-        `📁 **Kanal Silme Limiti:** \`${this.config.limits.channelDelete.limit} Kanal / ${this.config.limits.channelDelete.windowMs / 1000} Saniye\`\n` +
-        `🎭 **Rol Silme Limiti:** \`${this.config.limits.roleDelete.limit} Rol / ${this.config.limits.roleDelete.windowMs / 1000} Saniye\`\n` +
-        `💬 **Sohbet Spam Eşiği:** \`${this.config.limits.spam.messageThreshold} Mesaj / ${this.config.limits.spam.windowMs / 1000} Saniye\`\n` +
-        `⚠️ **Maksimum Spam Uyarısı:** \`${this.config.limits.spam.maxWarnings} İhlal (Ardından 5 Dk Timeout ve Mesaj Temizleme)\`\n\n` +
-        `⚖️ **Uygulanan Yaptırım:** \`İhlal yapan yetkilinin tüm rolleri geri alınır ve log kanalına kırmızı bildirim düşülür.\``
+        `› *İhlal durumunda yetkili rolleri otomatik olarak alınır ve denetim kaydına işlenir.*`
       )
+      .addSeparator(true, 1)
       .setFooter("Made by Noz");
   }
 
-  public getHelpContainer(): VedoContainerBuilder {
+  public async getHelpContainer(guild?: Guild | null): Promise<VedoContainerBuilder> {
+    const cardBuffer = await VedoThemeCard.generate({
+      title: "KOMUT REHBERİ",
+      greeting: "Merhaba Querencia yetkilileri,",
+      subtitle: "Sunucu genelinde yetkili yönetim, güvenlik, mülakat ve topluluk komutları rehberi.",
+      accentColor: "#D4AF37",
+      watermark: "QUERENCIA",
+      iconUrl: guild?.iconURL({ extension: "png", size: 128 }) || undefined,
+      columns: 3,
+      items: [
+        {
+          icon: "user",
+          title: "Kayıt & Mülakat",
+          description: "/kayit ayarla, kur, bilgi komutları"
+        },
+        {
+          icon: "file",
+          title: "Ticket Odaları",
+          description: "/ticket ayarla, kur, kapat komutları"
+        },
+        {
+          icon: "shield",
+          title: "Guard & Güvenlik",
+          description: "/guard ayarla, limitler, whitelist"
+        },
+        {
+          icon: "mic",
+          title: "Ses & AFK",
+          description: "/ses afk ve /ses-paneli komutları"
+        },
+        {
+          icon: "power",
+          title: "Bot Kontrolü",
+          description: "/bot durum ve /bot panel (Sahip)"
+        },
+        {
+          icon: "chat",
+          title: "Topluluk & Yönetim",
+          description: "/giris-cikis, /tweet, /sil, /ping"
+        }
+      ]
+    });
+
     return new VedoContainerBuilder()
-      .setAccentColor(0x5865f2)
+      .setAccentColor(VEDO_THEME_COLORS.gold)
+      .setImageBuffer(cardBuffer, "vedo-yardim.png")
       .addTextDisplay(
-        `# 📖 **VEDOGUARD FIVEM SLASH KOMUT REHBERİ**\n` +
-        `*Sunucu üzerinde aktif olan tüm yönetim ve etkileşim komutları:*\n\n` +
-        `📋 **KAYIT & MÜLAKAT KOMUTLARI**\n` +
-        `• \`/kayit ayarla uye-rolu:[@rol] mulakat-rolu:[@rol]\` → Rolleri tek komutla kaydeder.\n` +
-        `• \`/kayit kur kanal:[#kanal]\` → Başvuru panelini kanala kurar.\n` +
-        `• \`/kayit bilgi\` → Aktif kayıt yapılandırmasını gösterir.\n\n` +
-        `🎫 **TICKET & MÜLAKAT ODALARI**\n` +
-        `• \`/ticket ayarla kategori:[#kategori] yetkili-rolu:[@rol]\` → Ticket odalarını ayarlar.\n` +
-        `• \`/ticket kur kanal:[#kanal]\` → Ticket panelini kanala gönderir.\n` +
-        `• \`/ticket kapat\` → Açılan odayı 5 saniye içinde kapatır.\n\n` +
-        `🛡️ **GUARD & GÜVENLİK KOMUTLARI**\n` +
-        `• \`/guard ayarla\` → Log kanalı, ses odası ve limitleri belirler.\n` +
-        `• \`/guard limitler\` → Aktif güvenlik eşiklerini listeler.\n` +
-        `• \`/guard whitelist islem:[ekle/cikar]\` → Muaf kullanıcı/rol tanımlar.\n\n` +
-        `🔊 **SES & AFK YÖNETİMİ**\n` +
-        `• \`/ses afk kanal:[#kanal] durum:[Açık/Kapalı]\` → AFK odasındakileri otomatik susturur.\n` +
-        `• \`/ses-paneli\` → 7/24 ses durum panelini gönderir.\n\n` +
-        `⚡ **BOT KONTROLÜ (BOT SAHİBİ)**\n` +
-        `• \`/bot durum islem:[kapat/ac/bilgi]\` → Botu çevrimdışı (uyku) veya çevrimiçi yapar.\n` +
-        `• \`/bot panel\` → Butonlu çevrimdışı/çevrimiçi kontrol panelini gönderir.\n\n` +
-        `🐦 **TOPLULUK & YÖNETİM**\n` +
-        `• \`/giris-cikis liste\` → Son giren ve çıkan üyeleri listeler.\n` +
-        `• \`/giris-cikis ayarla kanal:[#kanal]\` → Otomatik bildirim kanalını belirler.\n` +
-        `• \`/tweet mesaj:[metin] gorsel:[resim]\` → X formatında tweet paylaşır.\n` +
-        `• \`/sil sayi:[1-100]\` → Kanaldaki mesajları toplu siler.\n` +
-        `• \`/ping\` → Bot gecikmesini ölçer.`
+        `› **Kayıt:** \`/kayit ayarla\`, \`/kayit kur\`, \`/kayit bilgi\`\n` +
+        `› **Ticket:** \`/ticket ayarla\`, \`/ticket kur\`, \`/ticket kapat\`\n` +
+        `› **Guard & Ses:** \`/guard ayarla\`, \`/guard limitler\`, \`/guard whitelist\`, \`/ses afk\`, \`/ses-paneli\`\n` +
+        `› **Bot & Topluluk:** \`/bot durum\`, \`/bot panel\`, \`/giris-cikis\`, \`/tweet\`, \`/sil\`, \`/ping\``
       )
+      .addSeparator(true, 1)
       .setFooter("Made by Noz");
   }
 
@@ -443,35 +504,67 @@ export class VedoGuardBot {
     return ownerIds.includes(userId);
   }
 
-  public getBotControlContainer(): VedoContainerBuilder {
+  public async getBotControlContainer(guild?: Guild | null): Promise<VedoContainerBuilder> {
     const isOffline = Boolean(this.config.botOfflineMode);
     const ownerDisplay = this.config.botOwnerId
       ? `<@${this.config.botOwnerId.split(",")[0].trim()}>`
       : "`Tanımlanmadı`";
-    const voiceStatus = isOffline
-      ? "`Uyku Modunda Kapalı`"
+    const ownerIdRaw = this.config.botOwnerId
+      ? this.config.botOwnerId.split(",")[0].trim()
+      : "Tanımlanmadı";
+    const voiceStatusText = isOffline
+      ? "Uyku Modunda Kapalı"
       : this.voiceManager.isConnected()
-        ? "`Bağlı`"
-        : "`Hazır`";
+        ? "Bağlı (7/24 Aktif)"
+        : "Hazır";
+
+    const cardBuffer = await VedoThemeCard.generate({
+      title: "BOT KONTROL PANELİ",
+      greeting: "Querencia Sistem Yönetimi,",
+      subtitle: "Botun Discord görünürlüğünü, 7/24 ses bağlantısını ve uyku modunu anlık olarak yönetin.",
+      accentColor: isOffline ? "#EF4444" : "#D4AF37",
+      watermark: "QUERENCIA",
+      iconUrl: guild?.iconURL({ extension: "png", size: 128 }) || undefined,
+      columns: 2,
+      items: [
+        {
+          icon: "power",
+          title: "Çalışma Durumu",
+          description: isOffline ? "Çevrimdışı (Görünmez + Uyku Modu)" : "Çevrimiçi (Aktif & Koruma Açık)",
+          accent: isOffline ? "#EF4444" : "#22C55E"
+        },
+        {
+          icon: "shield",
+          title: "Guard & Otomasyon",
+          description: isOffline ? "Duraklatıldı" : "Aktif",
+          accent: isOffline ? "#F59E0B" : "#22C55E"
+        },
+        {
+          icon: "mic",
+          title: "7/24 Ses Bağlantısı",
+          description: voiceStatusText
+        },
+        {
+          icon: "crown",
+          title: "Yetkili Sahip",
+          description: ownerIdRaw
+        }
+      ]
+    });
 
     return new VedoContainerBuilder()
-      .setAccentColor(isOffline ? 0xed4245 : 0x57f287)
+      .setAccentColor(isOffline ? VEDO_THEME_COLORS.danger : VEDO_THEME_COLORS.gold)
+      .setImageBuffer(cardBuffer, "vedo-bot-panel.png")
       .addTextDisplay(
-        `# ⚡ **VEDOGUARD BOT KONTROL PANELİ**\n` +
-        `> 📡 **Durum:** ${isOffline ? "🔴 `Çevrimdışı (Görünmez + Uyku Modu)`" : "🟢 `Çevrimiçi (Aktif & Koruma Açık)`"}\n` +
-        `> 🛡️ **Guard & Otomasyon:** ${isOffline ? "`Duraklatıldı`" : "`Aktif`"}\n` +
-        `> 🔊 **7/24 Ses Bağlantısı:** ${voiceStatus}\n` +
-        `> 👑 **Yetkili Sahip:** ${ownerDisplay}\n` +
-        `────────────────────────────────────────\n` +
-        `> ℹ️ *Bu paneldeki butonlar yalnızca tanımlı bot sahibi tarafından kullanılabilir.*`
+        `› **Durum:** ${isOffline ? "● Çevrimdışı (Uyku Modu)" : "● Çevrimiçi (Aktif)"}  •  **Yetkili Sahip:** ${ownerDisplay}`
       )
+      .addSeparator(true, 1)
       .addActionRow([
         {
           type: 2,
           style: 4,
           label: "Çevrimdışı Yap",
           custom_id: "vedo_bot_offline_btn",
-          emoji: { name: "🔴" },
           disabled: isOffline
         },
         {
@@ -479,15 +572,13 @@ export class VedoGuardBot {
           style: 3,
           label: "Çevrimiçi Yap",
           custom_id: "vedo_bot_online_btn",
-          emoji: { name: "🟢" },
           disabled: !isOffline
         },
         {
           type: 2,
           style: 2,
           label: "Durumu Yenile",
-          custom_id: "vedo_bot_status_btn",
-          emoji: { name: "🔄" }
+          custom_id: "vedo_bot_status_btn"
         }
       ])
       .setFooter("Made by Noz");
@@ -495,21 +586,23 @@ export class VedoGuardBot {
 
   private getOwnerOnlyContainer(): VedoContainerBuilder {
     return new VedoContainerBuilder()
-      .setAccentColor(0xed4245)
+      .setAccentColor(VEDO_THEME_COLORS.danger)
       .addTextDisplay(
-        `# ⛔ **YETKİSİZ İŞLEM**\n` +
-        `> ❌ *Bu komut ve kontrol paneli yalnızca bot sahibi tarafından kullanılabilir.*`
+        `### Yetkisiz İşlem\n` +
+        `› *Bu komut ve kontrol paneli yalnızca bot sahibi tarafından kullanılabilir.*`
       )
+      .addSeparator(true, 1)
       .setFooter("Made by Noz");
   }
 
   private getOfflineNoticeContainer(): VedoContainerBuilder {
     return new VedoContainerBuilder()
-      .setAccentColor(0xed4245)
+      .setAccentColor(VEDO_THEME_COLORS.danger)
       .addTextDisplay(
-        `# 🔴 **BOT ÇEVRİMDIŞI (UYKU MODUNDA)**\n` +
-        `> ℹ️ *Bot şu anda sahibi tarafından çevrimdışı/bakım moduna alınmıştır. Aktif edildiğinde komutlar yeniden çalışacaktır.*`
+        `### Bot Çevrimdışı (Uyku Modunda)\n` +
+        `› *Bot şu anda sahibi tarafından çevrimdışı/bakım moduna alınmıştır. Aktif edildiğinde komutlar yeniden çalışacaktır.*`
       )
+      .addSeparator(true, 1)
       .setFooter("Made by Noz");
   }
 
@@ -533,15 +626,15 @@ export class VedoGuardBot {
       const logChannel = guild?.channels.cache.get(this.config.logChannelId);
       if (logChannel && "send" in logChannel) {
         const logContainer = new VedoContainerBuilder()
-          .setAccentColor(offline ? 0xed4245 : 0x57f287)
+          .setAccentColor(offline ? VEDO_THEME_COLORS.danger : VEDO_THEME_COLORS.success)
           .addTextDisplay(
-            `# ${offline ? "🔴 **BOT ÇEVRİMDIŞI (UYKU MODU) AKTİF**" : "🟢 **BOT ÇEVRİMİÇİ MODA GEÇTİ**"}\n` +
-            `> ⚙️ **Yeni Durum:** ${offline ? "`Çevrimdışı (Görünmez + Uyku)`" : "`Çevrimiçi (Aktif)`"}\n` +
-            `> 👑 **İşlemi Yapan:** ${actorUserId ? `<@${actorUserId}>` : "`Sistem`"}\n` +
-            `> 🕒 **Zaman:** <t:${Math.floor(Date.now() / 1000)}:R>\n` +
-            `────────────────────────────────────────\n` +
-            `> ℹ️ *${offline ? "Bot görünmez duruma alındı, ses kanalından çıkarıldı ve tüm guard/komut otomasyonları duraklatıldı." : "Bot tekrar çevrimiçi duruma geçti ve tüm guard/ses sistemleri aktifleştirildi."}*`
+            `### ${offline ? "Bot Çevrimdışı (Uyku Modu)" : "Bot Çevrimiçi Moda Geçti"}\n` +
+            `› **Yeni Durum:** ${offline ? "`Çevrimdışı (Görünmez + Uyku)`" : "`Çevrimiçi (Aktif)`"}\n` +
+            `› **İşlemi Yapan:** ${actorUserId ? `<@${actorUserId}>` : "`Sistem`"}\n` +
+            `› **Zaman:** <t:${Math.floor(Date.now() / 1000)}:R>\n` +
+            `› *${offline ? "Bot görünmez duruma alındı, ses kanalından çıkarıldı ve tüm guard/komut otomasyonları duraklatıldı." : "Bot tekrar çevrimiçi duruma geçti ve tüm guard/ses sistemleri aktifleştirildi."}*`
           )
+          .addSeparator(true, 1)
           .setFooter("Made by Noz");
 
         await (logChannel as TextChannel).send(logContainer.toReply()).catch(() => {});
@@ -551,10 +644,7 @@ export class VedoGuardBot {
 
   private async handleBotPanelButton(interaction: ButtonInteraction): Promise<void> {
     if (!this.isBotOwner(interaction.user.id)) {
-      await interaction.reply({
-        ...this.getOwnerOnlyContainer().toReply(),
-        flags: MessageFlags.Ephemeral
-      });
+      await interaction.reply(this.getOwnerOnlyContainer().toEphemeralReply());
       return;
     }
 
@@ -566,7 +656,8 @@ export class VedoGuardBot {
       await this.setOfflineMode(false, interaction.user.id);
     }
 
-    await interaction.editReply(this.getBotControlContainer().toReply());
+    const updatedControl = await this.getBotControlContainer(interaction.guild);
+    await interaction.editReply(updatedControl.toEditReply());
   }
 
   private async handleSlashCommand(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -574,52 +665,48 @@ export class VedoGuardBot {
 
     if (commandName === "bot") {
       if (!this.isBotOwner(interaction.user.id)) {
-        await interaction.reply({
-          ...this.getOwnerOnlyContainer().toReply(),
-          flags: MessageFlags.Ephemeral
-        });
+        await interaction.reply(this.getOwnerOnlyContainer().toEphemeralReply());
         return;
       }
 
       const sub = interaction.options.getSubcommand();
 
       if (sub === "durum") {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const islem = interaction.options.getString("islem", true);
         if (islem === "kapat") {
           await this.setOfflineMode(true, interaction.user.id);
         } else if (islem === "ac") {
           await this.setOfflineMode(false, interaction.user.id);
         }
-        await interaction.reply({
-          ...this.getBotControlContainer().toReply(),
-          flags: MessageFlags.Ephemeral
-        });
+        const controlContainer = await this.getBotControlContainer(interaction.guild);
+        await interaction.editReply(controlContainer.toEditReply());
         return;
       }
 
       if (sub === "panel") {
-        const confirmContainer = new VedoContainerBuilder()
-          .setAccentColor(0x57f287)
-          .addTextDisplay("> ✅ *Bot kontrol paneli bu kanala başarıyla gönderildi.*")
-          .setFooter("Made by Noz");
-
-        await interaction.reply({
-          ...confirmContainer.toReply(),
-          flags: MessageFlags.Ephemeral
-        });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const controlContainer = await this.getBotControlContainer(interaction.guild);
 
         if (interaction.channel && "send" in interaction.channel) {
-          await interaction.channel.send(this.getBotControlContainer().toReply());
+          await interaction.channel.send(controlContainer.toReply());
         }
+
+        const confirmContainer = new VedoContainerBuilder()
+          .setAccentColor(VEDO_THEME_COLORS.success)
+          .addTextDisplay(
+            `### Kontrol Paneli Gönderildi\n` +
+            `› *Bot kontrol paneli bu kanala başarıyla gönderildi.*`
+          )
+          .setFooter("Made by Noz");
+
+        await interaction.editReply(confirmContainer.toEditReply());
         return;
       }
     }
 
     if (this.config.botOfflineMode) {
-      await interaction.reply({
-        ...this.getOfflineNoticeContainer().toReply(),
-        flags: MessageFlags.Ephemeral
-      });
+      await interaction.reply(this.getOfflineNoticeContainer().toEphemeralReply());
       return;
     }
 
@@ -646,15 +733,16 @@ export class VedoGuardBot {
         this.saveConfig();
 
         const container = new VedoContainerBuilder()
-          .setAccentColor(0x57f287)
+          .setAccentColor(VEDO_THEME_COLORS.success)
           .addTextDisplay(
-            `# 📋 **KAYIT & MÜLAKAT AYARLARI GÜNCELLENDİ**\n` +
-            `> 👑 **Kayıtlı Üye Rolü:** <@&${uyeRolu.id}>\n` +
-            `> 🛡️ **Mülakat Rolü:** <@&${mulakatRolu.id}>\n` +
-            `> 👮 **Yetkili Rolü:** ${this.config.staffRoleId ? `<@&${this.config.staffRoleId}>` : "`Tanımlanmadı`"}\n` +
-            `> 📁 **Mülakat Kategorisi:** ${this.config.ticketCategoryId ? `<#${this.config.ticketCategoryId}>` : "`Tanımlanmadı`"}\n\n` +
-            `ℹ️ *Ayarlar başarıyla kaydedildi ve hemen yürürlüğe girdi.*`
+            `### Kayıt & Mülakat Ayarları Güncellendi\n` +
+            `› **Kayıtlı Üye Rolü:** <@&${uyeRolu.id}>\n` +
+            `› **Mülakat Rolü:** <@&${mulakatRolu.id}>\n` +
+            `› **Yetkili Rolü:** ${this.config.staffRoleId ? `<@&${this.config.staffRoleId}>` : "`Tanımlanmadı`"}\n` +
+            `› **Mülakat Kategorisi:** ${this.config.ticketCategoryId ? `<#${this.config.ticketCategoryId}>` : "`Tanımlanmadı`"}\n` +
+            `› *Ayarlar başarıyla kaydedildi ve yürürlüğe girdi.*`
           )
+          .addSeparator(true, 1)
           .setFooter("Made by Noz");
 
         await interaction.reply(container.toReply());
@@ -662,41 +750,79 @@ export class VedoGuardBot {
       }
 
       if (sub === "kur") {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const kanal = interaction.options.getChannel("kanal", true);
         if ("send" in kanal) {
-          const panel = this.ticketManager.getPanelContainer();
+          const panel = await this.ticketManager.getPanelContainer(interaction.guild);
           await (kanal as TextChannel).send(panel.toReply());
-          await interaction.reply({
-            content: `> ✅ *Kayıt & mülakat başvuru paneli <#${kanal.id}> kanalına başarıyla kuruldu.*`,
-            flags: MessageFlags.Ephemeral
-          });
+          const okContainer = new VedoContainerBuilder()
+            .setAccentColor(VEDO_THEME_COLORS.success)
+            .addTextDisplay(
+              `### Kayıt Paneli Kuruldu\n` +
+              `› *Mülakat başvuru paneli <#${kanal.id}> kanalına başarıyla kuruldu.*`
+            )
+            .setFooter("Made by Noz");
+          await interaction.editReply(okContainer.toEditReply());
         } else {
-          await interaction.reply({
-            content: "> ❌ *Lütfen geçerli bir metin kanalı seçiniz.*",
-            flags: MessageFlags.Ephemeral
-          });
+          const errContainer = new VedoContainerBuilder()
+            .setAccentColor(VEDO_THEME_COLORS.danger)
+            .addTextDisplay(
+              `### Geçersiz Kanal\n` +
+              `› *Lütfen geçerli bir metin kanalı seçiniz.*`
+            )
+            .setFooter("Made by Noz");
+          await interaction.editReply(errContainer.toEditReply());
         }
         return;
       }
 
       if (sub === "bilgi") {
+        await interaction.deferReply();
         const reg = this.config.registeredRoleId ? `<@&${this.config.registeredRoleId}>` : "`Tanımlanmadı`";
         const unreg = this.config.unregisteredRoleId ? `<@&${this.config.unregisteredRoleId}>` : "`Tanımlanmadı`";
         const staff = this.config.staffRoleId ? `<@&${this.config.staffRoleId}>` : "`Tanımlanmadı`";
         const cat = this.config.ticketCategoryId ? `<#${this.config.ticketCategoryId}>` : "`Tanımlanmadı`";
 
+        const regName = this.config.registeredRoleId
+          ? `@${interaction.guild?.roles.cache.get(this.config.registeredRoleId)?.name || this.config.registeredRoleId}`
+          : "Tanımlanmadı";
+        const unregName = this.config.unregisteredRoleId
+          ? `@${interaction.guild?.roles.cache.get(this.config.unregisteredRoleId)?.name || this.config.unregisteredRoleId}`
+          : "Tanımlanmadı";
+        const staffName = this.config.staffRoleId
+          ? `@${interaction.guild?.roles.cache.get(this.config.staffRoleId)?.name || this.config.staffRoleId}`
+          : "Tanımlanmadı";
+        const catName = this.config.ticketCategoryId
+          ? `#${interaction.guild?.channels.cache.get(this.config.ticketCategoryId)?.name || this.config.ticketCategoryId}`
+          : "Tanımlanmadı";
+
+        const cardBuffer = await VedoThemeCard.generate({
+          title: "GÜNCEL KAYIT YAPILANDIRMASI",
+          greeting: "Querencia Kayıt Sistemi,",
+          subtitle: "Sunucuda aktif olarak kullanılan mülakat rolleri ve kategori yapılandırması özeti.",
+          accentColor: "#D4AF37",
+          watermark: "QUERENCIA",
+          iconUrl: interaction.guild?.iconURL({ extension: "png", size: 128 }) || undefined,
+          columns: 2,
+          items: [
+            { icon: "crown", title: "Kayıtlı Üye Rolü", description: regName },
+            { icon: "shield", title: "Mülakat Rolü", description: unregName },
+            { icon: "user", title: "Yetkili Rolü", description: staffName },
+            { icon: "file", title: "Mülakat Kategorisi", description: catName }
+          ]
+        });
+
         const infoContainer = new VedoContainerBuilder()
-          .setAccentColor(0x5865f2)
+          .setAccentColor(VEDO_THEME_COLORS.gold)
+          .setImageBuffer(cardBuffer, "vedo-kayit-bilgi.png")
           .addTextDisplay(
-            `# 📋 **GÜNCEL KAYIT YAPILANDIRMASI**\n` +
-            `> 👑 **Kayıtlı Üye Rolü:** ${reg}\n` +
-            `> 🛡️ **Mülakat Rolü:** ${unreg}\n` +
-            `> 👮 **Yetkili Rolü:** ${staff}\n` +
-            `> 📁 **Mülakat Kategorisi:** ${cat}`
+            `› **Üye:** ${reg}  •  **Mülakat:** ${unreg}\n` +
+            `› **Yetkili:** ${staff}  •  **Kategori:** ${cat}`
           )
+          .addSeparator(true, 1)
           .setFooter("Made by Noz");
 
-        await interaction.reply(infoContainer.toReply());
+        await interaction.editReply(infoContainer.toEditReply());
         return;
       }
     }
@@ -723,14 +849,15 @@ export class VedoGuardBot {
         this.saveConfig();
 
         const container = new VedoContainerBuilder()
-          .setAccentColor(0x57f287)
+          .setAccentColor(VEDO_THEME_COLORS.success)
           .addTextDisplay(
-            `# 🎫 **TICKET AYARLARI GÜNCELLENDİ**\n` +
-            `> 📁 **Ticket Kategorisi:** <#${kategori.id}>\n` +
-            `> 👮 **Yetkili Rolü:** ${this.config.staffRoleId ? `<@&${this.config.staffRoleId}>` : "`Tanımlanmadı`"}\n` +
-            `> 📜 **Log Kanalı:** ${this.config.logChannelId ? `<#${this.config.logChannelId}>` : "`Tanımlanmadı`"}\n\n` +
-            `ℹ️ *Ticket ve mülakat oda yapılandırması başarıyla kaydedildi.*`
+            `### Ticket Ayarları Güncellendi\n` +
+            `› **Ticket Kategorisi:** <#${kategori.id}>\n` +
+            `› **Yetkili Rolü:** ${this.config.staffRoleId ? `<@&${this.config.staffRoleId}>` : "`Tanımlanmadı`"}\n` +
+            `› **Log Kanalı:** ${this.config.logChannelId ? `<#${this.config.logChannelId}>` : "`Tanımlanmadı`"}\n` +
+            `› *Ticket ve mülakat oda yapılandırması kalıcı olarak kaydedildi.*`
           )
+          .addSeparator(true, 1)
           .setFooter("Made by Noz");
 
         await interaction.reply(container.toReply());
@@ -738,36 +865,54 @@ export class VedoGuardBot {
       }
 
       if (sub === "kur") {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const kanal = interaction.options.getChannel("kanal", true);
         if ("send" in kanal) {
-          const panel = this.ticketManager.getPanelContainer();
+          const panel = await this.ticketManager.getPanelContainer(interaction.guild);
           await (kanal as TextChannel).send(panel.toReply());
-          await interaction.reply({
-            content: `> ✅ *Mülakat ve ticket paneli <#${kanal.id}> kanalına başarıyla kuruldu.*`,
-            flags: MessageFlags.Ephemeral
-          });
+          const okContainer = new VedoContainerBuilder()
+            .setAccentColor(VEDO_THEME_COLORS.success)
+            .addTextDisplay(
+              `### Ticket Paneli Kuruldu\n` +
+              `› *Mülakat ve ticket paneli <#${kanal.id}> kanalına başarıyla kuruldu.*`
+            )
+            .setFooter("Made by Noz");
+          await interaction.editReply(okContainer.toEditReply());
         } else {
-          await interaction.reply({
-            content: "> ❌ *Lütfen geçerli bir metin kanalı seçiniz.*",
-            flags: MessageFlags.Ephemeral
-          });
+          const errContainer = new VedoContainerBuilder()
+            .setAccentColor(VEDO_THEME_COLORS.danger)
+            .addTextDisplay(
+              `### Geçersiz Kanal\n` +
+              `› *Lütfen geçerli bir metin kanalı seçiniz.*`
+            )
+            .setFooter("Made by Noz");
+          await interaction.editReply(errContainer.toEditReply());
         }
         return;
       }
 
       if (sub === "kapat") {
         if (interaction.channel && "delete" in interaction.channel) {
-          await interaction.reply({
-            content: "> 🔒 *Bu mülakat/ticket odası 5 saniye içerisinde siliniyor...*"
-          });
+          const closingContainer = new VedoContainerBuilder()
+            .setAccentColor(VEDO_THEME_COLORS.warning)
+            .addTextDisplay(
+              `### Oda Kapatılıyor\n` +
+              `› *Bu mülakat/ticket odası 5 saniye içerisinde siliniyor.*`
+            )
+            .setFooter("Made by Noz");
+          await interaction.reply(closingContainer.toReply());
           setTimeout(() => {
             interaction.channel?.delete().catch(() => {});
           }, 5000);
         } else {
-          await interaction.reply({
-            content: "> ❌ *Bu komut yalnızca silinebilir kanallarda çalıştırılabilir.*",
-            flags: MessageFlags.Ephemeral
-          });
+          const errContainer = new VedoContainerBuilder()
+            .setAccentColor(VEDO_THEME_COLORS.danger)
+            .addTextDisplay(
+              `### İşlem Başarısız\n` +
+              `› *Bu komut yalnızca silinebilir kanallarda çalıştırılabilir.*`
+            )
+            .setFooter("Made by Noz");
+          await interaction.reply(errContainer.toEphemeralReply());
         }
         return;
       }
@@ -798,15 +943,16 @@ export class VedoGuardBot {
         this.saveConfig();
 
         const container = new VedoContainerBuilder()
-          .setAccentColor(0x57f287)
+          .setAccentColor(VEDO_THEME_COLORS.success)
           .addTextDisplay(
-            `# 🛡️ **GUARD AYARLARI GÜNCELLENDİ**\n` +
-            `> 📜 **Log Kanalı:** ${this.config.logChannelId ? `<#${this.config.logChannelId}>` : "`Tanımlanmadı`"}\n` +
-            `> 🔊 **7/24 Ses Kanalı:** ${this.config.voiceChannelId ? `<#${this.config.voiceChannelId}>` : "`Tanımlanmadı`"}\n` +
-            `> 🔨 **Ban Limiti:** \`${this.config.limits.ban.limit} Ban / 10 Saniye\`\n` +
-            `> ⏳ **Timeout Limiti:** \`${this.config.limits.timeout.limit} Timeout / 10 Saniye\`\n\n` +
-            `ℹ️ *Guard limit ve kanal ayarları kalıcı olarak kaydedildi.*`
+            `### Guard Ayarları Güncellendi\n` +
+            `› **Log Kanalı:** ${this.config.logChannelId ? `<#${this.config.logChannelId}>` : "`Tanımlanmadı`"}\n` +
+            `› **7/24 Ses Kanalı:** ${this.config.voiceChannelId ? `<#${this.config.voiceChannelId}>` : "`Tanımlanmadı`"}\n` +
+            `› **Ban Limiti:** \`${this.config.limits.ban.limit} Ban / 10 Saniye\`\n` +
+            `› **Timeout Limiti:** \`${this.config.limits.timeout.limit} Timeout / 10 Saniye\`\n` +
+            `› *Guard limit ve kanal ayarları kalıcı olarak kaydedildi.*`
           )
+          .addSeparator(true, 1)
           .setFooter("Made by Noz");
 
         await interaction.reply(container.toReply());
@@ -814,7 +960,9 @@ export class VedoGuardBot {
       }
 
       if (sub === "limitler") {
-        await interaction.reply(this.getLimitsContainer().toReply());
+        await interaction.deferReply();
+        const limitsContainer = await this.getLimitsContainer(interaction.guild);
+        await interaction.editReply(limitsContainer.toEditReply());
         return;
       }
 
@@ -824,10 +972,14 @@ export class VedoGuardBot {
         const rol = interaction.options.getRole("rol");
 
         if (!kullanici && !rol) {
-          await interaction.reply({
-            content: "> ❌ *Lütfen bir kullanıcı veya rol belirtiniz.*",
-            flags: MessageFlags.Ephemeral
-          });
+          const errContainer = new VedoContainerBuilder()
+            .setAccentColor(VEDO_THEME_COLORS.danger)
+            .addTextDisplay(
+              `### Eksik Bilgi\n` +
+              `› *Lütfen bir kullanıcı veya rol belirtiniz.*`
+            )
+            .setFooter("Made by Noz");
+          await interaction.reply(errContainer.toEphemeralReply());
           return;
         }
 
@@ -862,14 +1014,15 @@ export class VedoGuardBot {
         this.saveConfig();
 
         const container = new VedoContainerBuilder()
-          .setAccentColor(0x57f287)
+          .setAccentColor(VEDO_THEME_COLORS.success)
           .addTextDisplay(
-            `# 🛡️ **WHITELIST GÜNCELLENDİ**\n` +
-            `> ⚙️ **İşlem:** \`${islem === "ekle" ? "Eklendi" : "Çıkarıldı"}\`\n` +
-            (kullanici ? `> 👤 **Kullanıcı:** <@${kullanici.id}>\n` : "") +
-            (rol ? `> 🎭 **Rol:** <@&${rol.id}>\n` : "") +
-            `\nℹ️ *Muafiyet listesi başarıyla güncellendi.*`
+            `### Whitelist Güncellendi\n` +
+            `› **İşlem:** \`${islem === "ekle" ? "Eklendi" : "Çıkarıldı"}\`\n` +
+            (kullanici ? `› **Kullanıcı:** <@${kullanici.id}>\n` : "") +
+            (rol ? `› **Rol:** <@&${rol.id}>\n` : "") +
+            `› *Muafiyet listesi başarıyla güncellendi.*`
           )
+          .addSeparator(true, 1)
           .setFooter("Made by Noz");
 
         await interaction.reply(container.toReply());
@@ -914,13 +1067,25 @@ export class VedoGuardBot {
           });
         }
 
-        await interaction.editReply({
-          content: "> ✅ *Tweet'iniz bire bir X formatında başarıyla paylaşıldı.*"
-        });
+        const tweetOk = new VedoContainerBuilder()
+          .setAccentColor(VEDO_THEME_COLORS.success)
+          .addTextDisplay(
+            `### Tweet Paylaşıldı\n` +
+            `› *Tweet görseliniz kanala başarıyla gönderildi.*`
+          )
+          .setFooter("Made by Noz");
+
+        await interaction.editReply(tweetOk.toEditReply());
       } catch {
-        await interaction.editReply({
-          content: "> ❌ *Tweet görseli oluşturulurken bir hata meydana geldi.*"
-        });
+        const tweetErr = new VedoContainerBuilder()
+          .setAccentColor(VEDO_THEME_COLORS.danger)
+          .addTextDisplay(
+            `### Tweet Gönderilemedi\n` +
+            `› *Tweet görseli oluşturulurken bir hata meydana geldi.*`
+          )
+          .setFooter("Made by Noz");
+
+        await interaction.editReply(tweetErr.toEditReply());
       }
       return;
     }
@@ -930,33 +1095,47 @@ export class VedoGuardBot {
 
       if (sub === "liste") {
         if (!interaction.guild) return;
+        await interaction.deferReply();
+
+        const joinCount = this.memberEvents.filter((ev) => ev.type === "giris").length;
+        const leaveCount = this.memberEvents.filter((ev) => ev.type === "cikis").length;
+
+        const cardBuffer = await VedoThemeCard.generate({
+          title: "SUNUCU GİRİŞ & ÇIKIŞ KAYITLARI",
+          greeting: "Querencia Üye Hareketleri,",
+          subtitle: "Sunucuya katılan ve ayrılan son üyelerin anlık izleme ve istatistik özeti.",
+          accentColor: "#D4AF37",
+          watermark: "QUERENCIA",
+          iconUrl: interaction.guild.iconURL({ extension: "png", size: 128 }) || undefined,
+          columns: 2,
+          items: [
+            { icon: "users", title: "Toplam Üye", description: `${interaction.guild.memberCount} üye` },
+            { icon: "check", title: "Son Katılımlar", description: `${joinCount} üye katıldı`, accent: "#22C55E" },
+            { icon: "cross", title: "Son Ayrılmalar", description: `${leaveCount} üye ayrıldı`, accent: "#EF4444" },
+            { icon: "list", title: "Son Hareketler", description: `Son ${this.memberEvents.length} kayıt` }
+          ]
+        });
 
         let listContent = "";
         if (this.memberEvents.length === 0) {
-          listContent = "> ℹ️ *Henüz kaydedilmiş yeni giriş veya çıkış hareketi bulunmuyor.*";
+          listContent = "› *Henüz kaydedilmiş yeni giriş veya çıkış hareketi bulunmuyor.*";
         } else {
           listContent = this.memberEvents
             .map((ev) => {
-              const icon = ev.type === "giris" ? "📥" : "📤";
-              const label = ev.type === "giris" ? "Katıldı" : "Ayrıldı";
-              return `> ${icon} **${label}:** <@${ev.userId}> (\`${ev.userTag}\`) - <t:${Math.floor(ev.timestamp / 1000)}:R>`;
+              const marker = ev.type === "giris" ? "● **Katıldı:**" : "● **Ayrıldı:**";
+              return `› ${marker} <@${ev.userId}> (\`${ev.userTag}\`) — <t:${Math.floor(ev.timestamp / 1000)}:R>`;
             })
             .join("\n");
         }
 
         const listContainer = new VedoContainerBuilder()
-          .setAccentColor(0x2f3136)
-          .addTextDisplay(
-            `# 📊 **SUNUCU GİRİŞ & ÇIKIŞ KAYITLARI**\n` +
-            `> 👥 **Toplam Sunucu Üyesi:** \`${interaction.guild.memberCount}\`\n` +
-            `────────────────────────────────────────\n` +
-            listContent +
-            `\n────────────────────────────────────────\n` +
-            `> 🕒 *Son ${this.memberEvents.length} üye hareketi listelenmektedir.*`
-          )
+          .setAccentColor(VEDO_THEME_COLORS.gold)
+          .setImageBuffer(cardBuffer, "vedo-giris-cikis.png")
+          .addTextDisplay(listContent)
+          .addSeparator(true, 1)
           .setFooter("Made by Noz");
 
-        await interaction.reply(listContainer.toReply());
+        await interaction.editReply(listContainer.toEditReply());
         return;
       }
 
@@ -966,13 +1145,13 @@ export class VedoGuardBot {
         this.saveConfig();
 
         const setupContainer = new VedoContainerBuilder()
-          .setAccentColor(0x57f287)
+          .setAccentColor(VEDO_THEME_COLORS.success)
           .addTextDisplay(
-            `# ⚙️ **GİRİŞ - ÇIKIŞ KANALI AYARLANDI**\n` +
-            `> 📢 **Bildirim Kanalı:** <#${kanal.id}>\n` +
-            `────────────────────────────────────────\n` +
-            `> ℹ️ *Artık sunucuya katılan veya ayrılan tüm üyeler bu kanala otomatik olarak bildirilecektir.*`
+            `### Giriş - Çıkış Kanalı Ayarlandı\n` +
+            `› **Bildirim Kanalı:** <#${kanal.id}>\n` +
+            `› *Sunucuya katılan veya ayrılan tüm üyeler bu kanala bildirilecektir.*`
           )
+          .addSeparator(true, 1)
           .setFooter("Made by Noz");
 
         await interaction.reply(setupContainer.toReply());
@@ -984,12 +1163,12 @@ export class VedoGuardBot {
         this.saveConfig();
 
         const closeContainer = new VedoContainerBuilder()
-          .setAccentColor(0xed4245)
+          .setAccentColor(VEDO_THEME_COLORS.danger)
           .addTextDisplay(
-            `# 🔒 **GİRİŞ - ÇIKIŞ BİLDİRİMLERİ KAPATILDI**\n` +
-            `────────────────────────────────────────\n` +
-            `> ℹ️ *Otomatik giriş ve çıkış bildirimleri devre dışı bırakıldı.*`
+            `### Giriş - Çıkış Bildirimleri Kapatıldı\n` +
+            `› *Otomatik giriş ve çıkış bildirimleri devre dışı bırakıldı.*`
           )
+          .addSeparator(true, 1)
           .setFooter("Made by Noz");
 
         await interaction.reply(closeContainer.toReply());
@@ -1008,13 +1187,13 @@ export class VedoGuardBot {
           this.saveConfig();
 
           const disableContainer = new VedoContainerBuilder()
-            .setAccentColor(0xed4245)
+            .setAccentColor(VEDO_THEME_COLORS.danger)
             .addTextDisplay(
-              `# 🔇 **AFK SUSTURMA DEVRE DIŞI BIRAKILDI**\n` +
-              `> ⚙️ **Durum:** \`Kapalı\`\n` +
-              `────────────────────────────────────────\n` +
-              `> ℹ️ *Artık AFK odasına geçen kullanıcılar otomatik olarak susturulmayacaktır.*`
+              `### AFK Susturma Devre Dışı Bırakıldı\n` +
+              `› **Durum:** \`Kapalı\`\n` +
+              `› *Artık AFK odasına geçen kullanıcılar otomatik olarak susturulmayacaktır.*`
             )
+            .addSeparator(true, 1)
             .setFooter("Made by Noz");
 
           await interaction.reply(disableContainer.toReply());
@@ -1024,10 +1203,14 @@ export class VedoGuardBot {
         const targetId = kanal ? kanal.id : this.config.afkChannelId || interaction.guild?.afkChannelId;
 
         if (!targetId) {
-          await interaction.reply({
-            content: "> ❌ *Sunucuda tanımlı bir Discord AFK odası bulunamadı. Lütfen bir kanal belirtiniz: `/ses afk kanal:[#kanal]`*",
-            flags: MessageFlags.Ephemeral
-          });
+          const errContainer = new VedoContainerBuilder()
+            .setAccentColor(VEDO_THEME_COLORS.danger)
+            .addTextDisplay(
+              `### AFK Odası Bulunamadı\n` +
+              `› *Sunucuda tanımlı bir Discord AFK odası bulunamadı. Lütfen kanal belirtiniz:* \`/ses afk kanal:[#kanal]\``
+            )
+            .setFooter("Made by Noz");
+          await interaction.reply(errContainer.toEphemeralReply());
           return;
         }
 
@@ -1047,15 +1230,15 @@ export class VedoGuardBot {
         }
 
         const successContainer = new VedoContainerBuilder()
-          .setAccentColor(0x57f287)
+          .setAccentColor(VEDO_THEME_COLORS.success)
           .addTextDisplay(
-            `# 🔇 **AFK OTOMATİK SUSTURMA AKTİF EDİLDİ**\n` +
-            `> 🔊 **AFK Kanalı:** <#${targetId}>\n` +
-            `> ⚙️ **Sistem Durumu:** \`Aktif (Sunucu Geneli Susturma)\`\n` +
-            `> 👥 **Mevcut Susturulan Üye:** \`${affectedCount}\`\n` +
-            `────────────────────────────────────────\n` +
-            `> ℹ️ *Bu odaya geçen veya Discord tarafından AFK'ya atılan tüm kullanıcılar anında otomatik olarak susturulacaktır (Server Mute).*`
+            `### AFK Otomatik Susturma Aktif Edildi\n` +
+            `› **AFK Kanalı:** <#${targetId}>\n` +
+            `› **Sistem Durumu:** \`Aktif (Sunucu Geneli Susturma)\`\n` +
+            `› **Mevcut Susturulan Üye:** \`${affectedCount}\`\n` +
+            `› *Bu odaya geçen tüm kullanıcılar otomatik olarak susturulacaktır.*`
           )
+          .addSeparator(true, 1)
           .setFooter("Made by Noz");
 
         await interaction.reply(successContainer.toReply());
@@ -1064,27 +1247,37 @@ export class VedoGuardBot {
     }
 
     if (commandName === "kayit-paneli") {
-      const panel = this.ticketManager.getPanelContainer();
-      await interaction.reply({
-        content: "> ✅ *Mülakat paneli başarıyla oluşturuluyor...*",
-        flags: MessageFlags.Ephemeral
-      });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      const panel = await this.ticketManager.getPanelContainer(interaction.guild);
       if (interaction.channel && "send" in interaction.channel) {
         await interaction.channel.send(panel.toReply());
       }
+      const confirmContainer = new VedoContainerBuilder()
+        .setAccentColor(VEDO_THEME_COLORS.success)
+        .addTextDisplay(
+          `### Mülakat Paneli Oluşturuldu\n` +
+          `› *Başvuru paneli bu kanala başarıyla gönderildi.*`
+        )
+        .setFooter("Made by Noz");
+      await interaction.editReply(confirmContainer.toEditReply());
       return;
     }
 
     if (commandName === "ses-paneli") {
       if (!interaction.guild) return;
-      const panel = this.voiceManager.getStatusContainer(interaction.guild);
-      await interaction.reply({
-        content: "> ✅ *Ses kontrol paneli başarıyla oluşturuluyor...*",
-        flags: MessageFlags.Ephemeral
-      });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      const panel = await this.voiceManager.getStatusContainer(interaction.guild);
       if (interaction.channel && "send" in interaction.channel) {
         await interaction.channel.send(panel.toReply());
       }
+      const confirmContainer = new VedoContainerBuilder()
+        .setAccentColor(VEDO_THEME_COLORS.success)
+        .addTextDisplay(
+          `### Ses Kontrol Paneli Oluşturuldu\n` +
+          `› *7/24 ses kontrol paneli bu kanala başarıyla gönderildi.*`
+        )
+        .setFooter("Made by Noz");
+      await interaction.editReply(confirmContainer.toEditReply());
       return;
     }
 
@@ -1094,13 +1287,14 @@ export class VedoGuardBot {
         try {
           const deleted = await interaction.channel.bulkDelete(amount, true);
           const successContainer = new VedoContainerBuilder()
-            .setAccentColor(0x57f287)
+            .setAccentColor(VEDO_THEME_COLORS.success)
             .addTextDisplay(
-              `# 🗑️ **MESAJ TEMİZLEME İŞLEMİ**\n` +
-              `> 💬 **Silinen Mesaj Sayısı:** \`${deleted.size}\`\n` +
-              `> 👤 **İşlemi Yapan:** <@${interaction.user.id}>\n` +
-              `> ℹ️ *14 günden eski mesajlar Discord politikası gereği toplu silinemez.*`
+              `### Mesaj Temizleme Tamamlandı\n` +
+              `› **Silinen Mesaj Sayısı:** \`${deleted.size}\`\n` +
+              `› **İşlemi Yapan:** <@${interaction.user.id}>\n` +
+              `› *14 günden eski mesajlar Discord politikası gereği toplu silinemez.*`
             )
+            .addSeparator(true, 1)
             .setFooter("Made by Noz");
 
           await interaction.reply(successContainer.toReply());
@@ -1108,35 +1302,42 @@ export class VedoGuardBot {
             interaction.deleteReply().catch(() => {});
           }, 5000);
         } catch {
-          await interaction.reply({
-            content: "> ❌ *Mesajlar silinirken bir hata oluştu.*",
-            flags: MessageFlags.Ephemeral
-          });
+          const errContainer = new VedoContainerBuilder()
+            .setAccentColor(VEDO_THEME_COLORS.danger)
+            .addTextDisplay(
+              `### İşlem Başarısız\n` +
+              `› *Mesajlar silinirken bir hata oluştu.*`
+            )
+            .setFooter("Made by Noz");
+          await interaction.reply(errContainer.toEphemeralReply());
         }
       }
       return;
     }
 
     if (commandName === "limitler") {
-      const limitsContainer = this.getLimitsContainer();
-      await interaction.reply(limitsContainer.toReply());
+      await interaction.deferReply();
+      const limitsContainer = await this.getLimitsContainer(interaction.guild);
+      await interaction.editReply(limitsContainer.toEditReply());
       return;
     }
 
     if (commandName === "yardim") {
-      const helpContainer = this.getHelpContainer();
-      await interaction.reply(helpContainer.toReply());
+      await interaction.deferReply();
+      const helpContainer = await this.getHelpContainer(interaction.guild);
+      await interaction.editReply(helpContainer.toEditReply());
       return;
     }
 
     if (commandName === "ping") {
       const pingContainer = new VedoContainerBuilder()
-        .setAccentColor(0x5865f2)
+        .setAccentColor(VEDO_THEME_COLORS.gold)
         .addTextDisplay(
-          `# 🏓 **PONG! SİSTEM GECİKMESİ**\n` +
-          `> 📡 **WebSocket Gecikmesi:** \`${this.client.ws.ping}ms\`\n` +
-          `> ⏱️ **Mesaj Yanıt Süresi:** \`${Math.abs(Date.now() - interaction.createdTimestamp)}ms\``
+          `### Sistem Gecikmesi\n` +
+          `› **WebSocket Gecikmesi:** \`${this.client.ws.ping}ms\`\n` +
+          `› **Mesaj Yanıt Süresi:** \`${Math.abs(Date.now() - interaction.createdTimestamp)}ms\``
         )
+        .addSeparator(true, 1)
         .setFooter("Made by Noz");
       await interaction.reply(pingContainer.toReply());
       return;
@@ -1201,15 +1402,15 @@ export class VedoGuardBot {
         const channel = member.guild.channels.cache.get(this.config.joinLeaveChannelId);
         if (channel && "send" in channel) {
           const joinContainer = new VedoContainerBuilder()
-            .setAccentColor(0x57f287)
+            .setAccentColor(VEDO_THEME_COLORS.success)
             .addTextDisplay(
-              `# 📥 **YENİ ÜYE KATILDI**\n` +
-              `> 👤 **Kullanıcı:** <@${member.id}> (\`${member.user.tag}\`)\n` +
-              `> 🕒 **Katılım Zamanı:** <t:${Math.floor(Date.now() / 1000)}:R>\n` +
-              `> 📅 **Hesap Açılış:** <t:${Math.floor(member.user.createdTimestamp / 1000)}:d>\n` +
-              `────────────────────────────────────────\n` +
-              `> 👥 **Toplam Sunucu Üyesi:** \`${member.guild.memberCount}\``
+              `### Yeni Üye Katıldı\n` +
+              `› **Kullanıcı:** <@${member.id}> (\`${member.user.tag}\`)\n` +
+              `› **Katılım Zamanı:** <t:${Math.floor(Date.now() / 1000)}:R>\n` +
+              `› **Hesap Açılış:** <t:${Math.floor(member.user.createdTimestamp / 1000)}:d>\n` +
+              `› **Toplam Sunucu Üyesi:** \`${member.guild.memberCount}\``
             )
+            .addSeparator(true, 1)
             .setFooter("Made by Noz");
 
           await (channel as TextChannel).send(joinContainer.toReply()).catch(() => {});
@@ -1235,14 +1436,14 @@ export class VedoGuardBot {
         const channel = member.guild.channels.cache.get(this.config.joinLeaveChannelId);
         if (channel && "send" in channel) {
           const leaveContainer = new VedoContainerBuilder()
-            .setAccentColor(0xed4245)
+            .setAccentColor(VEDO_THEME_COLORS.danger)
             .addTextDisplay(
-              `# 📤 **BİR ÜYE AYRILDI**\n` +
-              `> 👤 **Kullanıcı:** <@${member.id}> (\`${member.user.tag}\`)\n` +
-              `> 🕒 **Ayrılma Zamanı:** <t:${Math.floor(Date.now() / 1000)}:R>\n` +
-              `────────────────────────────────────────\n` +
-              `> 👥 **Kalan Üye Sayısı:** \`${member.guild.memberCount}\``
+              `### Bir Üye Ayrıldı\n` +
+              `› **Kullanıcı:** <@${member.id}> (\`${member.user.tag}\`)\n` +
+              `› **Ayrılma Zamanı:** <t:${Math.floor(Date.now() / 1000)}:R>\n` +
+              `› **Kalan Üye Sayısı:** \`${member.guild.memberCount}\``
             )
+            .addSeparator(true, 1)
             .setFooter("Made by Noz");
 
           await (channel as TextChannel).send(leaveContainer.toReply()).catch(() => {});
@@ -1315,15 +1516,15 @@ export class VedoGuardBot {
               const logChannel = newState.guild.channels.cache.get(this.config.logChannelId);
               if (logChannel && "send" in logChannel) {
                 const logCard = new VedoContainerBuilder()
-                  .setAccentColor(0x2f3136)
+                  .setAccentColor(VEDO_THEME_COLORS.obsidian)
                   .addTextDisplay(
-                    `# 🔇 **AFK OTOMATİK SUSTURMA UYGULANDI**\n` +
-                    `> 👤 **Üye:** <@${newState.member.id}> (\`${newState.member.user.tag}\`)\n` +
-                    `> 🔊 **AFK Odası:** <#${targetAfkChannelId}>\n` +
-                    `> 🕒 **Zaman:** <t:${Math.floor(Date.now() / 1000)}:R>\n` +
-                    `────────────────────────────────────────\n` +
-                    `> ℹ️ *Kullanıcı AFK kanalına girdiği için mikrofonu sunucu genelinde susturuldu.*`
+                    `### AFK Otomatik Susturma Uygulandı\n` +
+                    `› **Üye:** <@${newState.member.id}> (\`${newState.member.user.tag}\`)\n` +
+                    `› **AFK Odası:** <#${targetAfkChannelId}>\n` +
+                    `› **Zaman:** <t:${Math.floor(Date.now() / 1000)}:R>\n` +
+                    `› *Kullanıcı AFK kanalına girdiği için mikrofonu sunucu genelinde susturuldu.*`
                   )
+                  .addSeparator(true, 1)
                   .setFooter("Made by Noz");
                 await (logChannel as TextChannel).send(logCard.toReply()).catch(() => {});
               }
@@ -1348,12 +1549,14 @@ export class VedoGuardBot {
       if (!message.guild || message.author.bot) return;
 
       if (message.content === "!limitler") {
-        await message.channel.send(this.getLimitsContainer().toReply());
+        const limitsContainer = await this.getLimitsContainer(message.guild);
+        await message.channel.send(limitsContainer.toReply());
         return;
       }
 
       if (message.content === "!yardım" || message.content === "!help") {
-        await message.channel.send(this.getHelpContainer().toReply());
+        const helpContainer = await this.getHelpContainer(message.guild);
+        await message.channel.send(helpContainer.toReply());
         return;
       }
 
@@ -1373,10 +1576,7 @@ export class VedoGuardBot {
             return;
           }
           if (this.config.botOfflineMode) {
-            await interaction.reply({
-              ...this.getOfflineNoticeContainer().toReply(),
-              flags: MessageFlags.Ephemeral
-            });
+            await interaction.reply(this.getOfflineNoticeContainer().toEphemeralReply());
             return;
           }
           if (interaction.customId.startsWith("vedo_ticket_")) {
@@ -1391,10 +1591,7 @@ export class VedoGuardBot {
 
         if (interaction.isModalSubmit()) {
           if (this.config.botOfflineMode) {
-            await interaction.reply({
-              ...this.getOfflineNoticeContainer().toReply(),
-              flags: MessageFlags.Ephemeral
-            });
+            await interaction.reply(this.getOfflineNoticeContainer().toEphemeralReply());
             return;
           }
           if (interaction.customId === "vedo_ticket_modal_submit") {

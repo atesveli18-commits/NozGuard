@@ -1,5 +1,5 @@
 import { Message, GuildMember } from "discord.js";
-import { VedoContainerBuilder } from "./VedoContainerBuilder";
+import { VedoContainerBuilder, VEDO_THEME_COLORS } from "./VedoContainerBuilder";
 import { VedoDatabase } from "./VedoDatabase";
 
 interface IVedoUserSpamState {
@@ -118,27 +118,28 @@ export class VedoSpamGuard {
         );
 
         const timeoutContainer = new VedoContainerBuilder()
-          .setAccentColor(0xed4245)
+          .setAccentColor(VEDO_THEME_COLORS.danger)
           .addTextDisplay(
-            `# ⏳ **SOHBET SUSTURMA CEZASI**\n` +
-            `👤 **Kullanıcı:** <@${userId}>\n` +
-            `⏱️ **Süre:** \`5 Dakika (Timeout)\`\n` +
-            `⚠️ **Sebep:** \`Sürekli hızlı mesaj ve spam tespiti\``
+            `### Sohbet Susturma Cezası\n` +
+            `› **Kullanıcı:** <@${userId}>\n` +
+            `› **Süre:** \`5 Dakika (Timeout)\`\n` +
+            `› **Sebep:** \`Sürekli hızlı mesaj ve spam tespiti\``
           )
-          .setFooter("VedoGuard UI V2 Sohbet Koruması");
+          .addSeparator(true, 1)
+          .setFooter("Made by Noz");
 
         await message.channel.send(timeoutContainer.toReply());
         this.userStates.delete(userId);
       } else {
         const warnContainer = new VedoContainerBuilder()
-          .setAccentColor(0xfee75c)
+          .setAccentColor(VEDO_THEME_COLORS.warning)
           .addTextDisplay(
-            `# ⚠️ **SOHBET HIZI UYARISI**\n` +
-            `Lütfen çok hızlı mesaj göndermeyiniz <@${userId}>!\n\n` +
-            `📊 **Uyarı Sayacı:** \`${state.warnings}/${this.maxWarnings}\`\n` +
-            `ℹ️ *Tekrarı durumunda 5 dakika süreyle kanallarda susturulacaksınız.*`
+            `### Sohbet Hızı Uyarısı\n` +
+            `› **Kullanıcı:** <@${userId}> — *Lütfen çok hızlı mesaj göndermeyiniz.*\n` +
+            `› **Uyarı Sayacı:** \`${state.warnings}/${this.maxWarnings}\`  •  *Tekrarında 5 dakika susturulacaksınız.*`
           )
-          .setFooter("VedoGuard UI V2 Sohbet Koruması");
+          .addSeparator(true, 1)
+          .setFooter("Made by Noz");
 
         const warnMsg = await message.channel.send(warnContainer.toReply());
         setTimeout(() => {

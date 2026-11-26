@@ -10,7 +10,8 @@ import {
   VoiceConnectionStatus,
   entersState
 } from "@discordjs/voice";
-import { VedoContainerBuilder } from "./VedoContainerBuilder";
+import { VedoContainerBuilder, VEDO_THEME_COLORS } from "./VedoContainerBuilder";
+import { VedoThemeCard } from "./VedoThemeCard";
 
 export class VedoVoiceManager {
   private client: Client;
@@ -113,14 +114,13 @@ export class VedoVoiceManager {
     return await this.join(this.currentGuildId, this.currentChannelId);
   }
 
-  public getStatusContainer(guild: Guild): VedoContainerBuilder {
+  public async getStatusContainer(guild: Guild): Promise<VedoContainerBuilder> {
     const channel = this.currentChannelId
       ? guild.channels.cache.get(this.currentChannelId)
       : null;
 
     const isConnected = this.connection?.state.status === VoiceConnectionStatus.Ready;
     const channelName = channel ? channel.name : "Tanımlanmadı";
-    const statusText = isConnected ? "🟢 Bağlı ve Aktif (7/24 Koruma)" : "🔴 Bağlantı Yok";
 
     let uptimeText = "0 Dakika";
     if (this.joinedTimestamp > 0 && isConnected) {
@@ -129,36 +129,71 @@ export class VedoVoiceManager {
       uptimeText = hours > 0 ? `${hours} Saat ${minutes % 60} Dakika` : `${minutes} Dakika`;
     }
 
-    const container = new VedoContainerBuilder()
-      .setAccentColor(isConnected ? 0x57f287 : 0xed4245)
+    const cardBuffer = await VedoThemeCard.generate({
+      title: "7/24 SES KONTROL PANELİ",
+      greeting: "Querencia Ses Altyapısı,",
+      subtitle: "Botun ses kanalı aktifliği, anlık bağlantı durumu ve otomatik yeniden bağlanma telemetrisi.",
+      accentColor: isConnected ? "#D4AF37" : "#EF4444",
+      watermark: "QUERENCIA",
+      iconUrl: guild.iconURL({ extension: "png", size: 128 }) || undefined,
+      columns: 3,
+      items: [
+        {
+          icon: "power",
+          title: "Bağlantı Durumu",
+          description: isConnected ? "Aktif — 7/24 Koruma" : "Bağlantı Yok",
+          accent: isConnected ? "#22C55E" : "#EF4444"
+        },
+        {
+          icon: "mic",
+          title: "Aktif Ses Kanalı",
+          description: channelName
+        },
+        {
+          icon: "clock",
+          title: "Kesintisiz Süre",
+          description: uptimeText
+        },
+        {
+          icon: "micOff",
+          title: "Sağırlaştırma",
+          description: "Aktif (selfDeaf: true)"
+        },
+        {
+          icon: "refresh",
+          title: "Yeniden Bağlanma",
+          description: `${this.reconnectAttempts} deneme`
+        },
+        {
+          icon: "shield",
+          title: "Koruma Modu",
+          description: "Self-Healing Aktif"
+        }
+      ]
+    });
+
+    return new VedoContainerBuilder()
+      .setAccentColor(isConnected ? VEDO_THEME_COLORS.gold : VEDO_THEME_COLORS.danger)
+      .setImageBuffer(cardBuffer, "vedo-ses-panel.png")
       .addTextDisplay(
-        `# 🎙️ **7/24 SES KONTROL PANELİ**\n` +
-        `*Botun ses kanalı aktifliği ve self-healing bağlantı durumu.*\n\n` +
-        `📡 **Bağlantı Durumu:** ${statusText}\n` +
-        `🔊 **Aktif Ses Kanalı:** ${channel ? `<#${channel.id}> (${channelName})` : "`Kanal Bulunamadı`"}\n` +
-        `⏱️ **Kesintisiz Çalışma Süresi:** \`${uptimeText}\`\n` +
-        `🔇 **Kendi Sağırlaştırma:** \`Aktif (selfDeaf: true)\`\n` +
-        `🔄 **Yeniden Bağlanma Sayısı:** \`${this.reconnectAttempts}\``
+        `› **Hedef Ses Kanalı:** ${channel ? `<#${channel.id}>` : "`Tanımlanmadı`"}  •  **Durum:** ${isConnected ? "● Çevrimiçi" : "● Bağlantı Yok"}`
       )
+      .addSeparator(true, 1)
       .addActionRow([
         {
           type: 2,
-          style: 3,
+          style: 2,
           label: "Yeniden Bağlan",
-          custom_id: "vedo_voice_reconnect_btn",
-          emoji: { name: "🔄" }
+          custom_id: "vedo_voice_reconnect_btn"
         },
         {
           type: 2,
-          style: 1,
+          style: 2,
           label: "Durumu Yenile",
-          custom_id: "vedo_voice_status_btn",
-          emoji: { name: "📊" }
+          custom_id: "vedo_voice_status_btn"
         }
       ])
-      .setFooter("VedoGuard UI V2 7/24 Ses Sistemi");
-
-    return container;
+      .setFooter("Made by Noz");
   }
 
   public async handleInteraction(interaction: ButtonInteraction): Promise<void> {
@@ -169,12 +204,12 @@ export class VedoVoiceManager {
     if (interaction.customId === "vedo_voice_reconnect_btn") {
       await interaction.deferUpdate();
       await this.reconnect();
-      const updatedContainer = this.getStatusContainer(interaction.guild);
-      await interaction.editReply(updatedContainer.toReply());
+      const updatedContainer = await this.getStatusContainer(interaction.guild);
+      await interaction.editReply(updatedContainer.toEditReply());
     } else if (interaction.customId === "vedo_voice_status_btn") {
       await interaction.deferUpdate();
-      const updatedContainer = this.getStatusContainer(interaction.guild);
-      await interaction.editReply(updatedContainer.toReply());
+      const updatedContainer = await this.getStatusContainer(interaction.guild);
+      await interaction.editReply(updatedContainer.toEditReply());
     }
   }
 }

@@ -88,7 +88,17 @@ export class VedoGuardBot {
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildVoiceStates
       ],
-      partials: [Partials.Message, Partials.Channel, Partials.GuildMember]
+      partials: [Partials.Message, Partials.Channel, Partials.GuildMember],
+      rest: {
+        rejectOnRateLimit: (rateLimitData) => {
+          const waitMs = Math.max(
+            rateLimitData.timeToReset,
+            rateLimitData.retryAfter,
+            rateLimitData.sublimitTimeout
+          );
+          return rateLimitData.route.includes("/emojis") && waitMs > 15000;
+        }
+      }
     });
 
     this.auditGuard = new VedoAuditGuard(
@@ -1193,6 +1203,16 @@ export class VedoGuardBot {
       const dosya = interaction.options.getAttachment("dosya", true);
       await interaction.deferReply();
 
+      const deliverReply = async (container: VedoContainerBuilder): Promise<void> => {
+        try {
+          await interaction.editReply(container.toEditReply());
+        } catch {
+          if (interaction.channel && "send" in interaction.channel) {
+            await (interaction.channel as TextChannel).send(container.toReply()).catch(() => {});
+          }
+        }
+      };
+
       try {
         const parsed = await VedoEmojiUploader.parseAttachmentFile(
           dosya,
@@ -1207,7 +1227,7 @@ export class VedoGuardBot {
               `› *Seçilen dosyada geçerli bir görsel (PNG, JPG, WEBP, GIF) bulunamadı.*`
             )
             .setFooter("Made by Noz");
-          await interaction.editReply(emptyContainer.toEditReply());
+          await deliverReply(emptyContainer);
           return;
         }
 
@@ -1218,18 +1238,29 @@ export class VedoGuardBot {
             `› **Toplam:** \`${parsed.items.length}\` emoji \`querencia\` adıyla yükleniyor — *lütfen bekleyiniz.*`
           )
           .setFooter("Made by Noz");
-        await interaction.editReply(progressContainer.toEditReply());
+        await interaction.editReply(progressContainer.toEditReply()).catch(() => {});
 
         const result = await VedoEmojiUploader.uploadBatch(
           interaction.guild,
           parsed.items,
-          parsed.truncatedCount
+          parsed.truncatedCount,
+          async (progress) => {
+            const liveContainer = new VedoContainerBuilder()
+              .setAccentColor(VEDO_THEME_COLORS.gold)
+              .addTextDisplay(
+                `### Toplu Emoji Yükleniyor\n` +
+                `› **İlerleme:** \`${progress.processed} / ${progress.total}\`  •  **Başarılı:** \`${progress.succeeded}\`  •  **Başarısız:** \`${progress.failed}\`\n` +
+                `› *${progress.statusNote || "Emojiler querencia adıyla sırayla yükleniyor..."}*`
+              )
+              .setFooter("Made by Noz");
+            await interaction.editReply(liveContainer.toEditReply()).catch(() => {});
+          }
         );
         const reportContainer = await VedoEmojiUploader.buildResultContainer(
           interaction.guild,
           result
         );
-        await interaction.editReply(reportContainer.toEditReply());
+        await deliverReply(reportContainer);
       } catch (err: any) {
         const errContainer = new VedoContainerBuilder()
           .setAccentColor(VEDO_THEME_COLORS.danger)
@@ -1238,7 +1269,7 @@ export class VedoGuardBot {
             `› **Detay:** ${err?.message || "Dosya işlenirken beklenmeyen bir hata oluştu."}`
           )
           .setFooter("Made by Noz");
-        await interaction.editReply(errContainer.toEditReply());
+        await deliverReply(errContainer);
       }
       return;
     }

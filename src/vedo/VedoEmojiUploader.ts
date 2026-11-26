@@ -41,10 +41,52 @@ export interface IVedoEmojiBatchResult {
   staticUsed: number;
   animatedUsed: number;
   durationMs: number;
+  rateLimitWaitMs?: number;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+export interface IVedoEmojiProgress {
+  processed: number;
+  total: number;
+  succeeded: number;
+  failed: number;
+  statusNote?: string;
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, timeoutMessage: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(timeoutMessage));
+    }, ms);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+  });
+}
+
+function formatWaitDuration(ms: number): string {
+  if (ms >= 60000) {
+    return `${Math.max(1, Math.ceil(ms / 60000))} dk`;
+  }
+  return `${Math.max(1, Math.ceil(ms / 1000))} sn`;
+}
+
+function extractRateLimitWaitMs(error: any): number {
+  return Math.max(
+    Number(error?.timeToReset || 0),
+    Number(error?.retryAfter || 0),
+    Number(error?.sublimitTimeout || 0),
+    Number(error?.data?.retry_after || 0) * 1000
+  );
+}
+
+function isRateLimitError(error: any): boolean {
+  return Boolean(
+    error?.status === 429 ||
+      (typeof error?.name === "string" && error.name.startsWith("RateLimitError"))
+  );
 }
 
 function isPrivateIpv4(host: string): boolean {
@@ -87,6 +129,34 @@ async function resizeStaticEmoji(buffer: Buffer, targetSize: number): Promise<Bu
   return canvas.toBuffer("image/png");
 }
 
+function isPngMagic(buffer: Buffer): boolean {
+  return (
+    buffer.length >= 4 &&
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47
+  );
+}
+
+function isJpegMagic(buffer: Buffer): boolean {
+  return buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+}
+
+function isWebpMagic(buffer: Buffer): boolean {
+  return (
+    buffer.length >= 12 &&
+    buffer[0] === 0x52 &&
+    buffer[1] === 0x49 &&
+    buffer[2] === 0x46 &&
+    buffer[3] === 0x46 &&
+    buffer[8] === 0x57 &&
+    buffer[9] === 0x45 &&
+    buffer[10] === 0x42 &&
+    buffer[11] === 0x50
+  );
+}
+
 function isGifMagic(buffer: Buffer): boolean {
   return (
     buffer.length >= 4 &&
@@ -98,35 +168,12 @@ function isGifMagic(buffer: Buffer): boolean {
 }
 
 function isValidImageBuffer(buffer: Buffer): boolean {
-  if (
-    buffer.length >= 4 &&
-    buffer[0] === 0x89 &&
-    buffer[1] === 0x50 &&
-    buffer[2] === 0x4e &&
-    buffer[3] === 0x47
-  ) {
-    return true;
-  }
-  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
-    return true;
-  }
-  if (isGifMagic(buffer)) {
-    return true;
-  }
-  if (
-    buffer.length >= 12 &&
-    buffer[0] === 0x52 &&
-    buffer[1] === 0x49 &&
-    buffer[2] === 0x46 &&
-    buffer[3] === 0x46 &&
-    buffer[8] === 0x57 &&
-    buffer[9] === 0x45 &&
-    buffer[10] === 0x42 &&
-    buffer[11] === 0x50
-  ) {
-    return true;
-  }
-  return false;
+  return (
+    isPngMagic(buffer) ||
+    isJpegMagic(buffer) ||
+    isGifMagic(buffer) ||
+    isWebpMagic(buffer)
+  );
 }
 
 function isZipMagic(buffer: Buffer): boolean {
@@ -505,32 +552,51 @@ export class VedoEmojiUploader {
     buffer: Buffer,
     hintedAnimated: boolean,
     contentType: string = ""
-  ): Promise<{ buffer: Buffer; animated: boolean }> {
+  ): Promise<{ buffer: Buffer; animated: boolean; mimeType: "image/png" | "image/jpeg" | "image/gif" }> {
     const normalizedType = contentType.toLowerCase();
     const isAnimated =
       isGifMagic(buffer) ||
       normalizedType.includes("image/gif") ||
-      (hintedAnimated && buffer[0] !== 0x89 && buffer[0] !== 0xff);
+      (hintedAnimated && !isPngMagic(buffer) && !isJpegMagic(buffer) && !isWebpMagic(buffer));
 
     if (isAnimated) {
       if (buffer.length > this.MAX_EMOJI_BYTES) {
         throw new Error("Hareketli GIF 256 KB sınırını aşıyor");
       }
-      return { buffer, animated: true };
+      return { buffer, animated: true, mimeType: "image/gif" };
+    }
+
+    if (isWebpMagic(buffer)) {
+      const converted128 = await resizeStaticEmoji(buffer, 128);
+      if (converted128.length <= this.MAX_EMOJI_BYTES) {
+        return { buffer: converted128, animated: false, mimeType: "image/png" };
+      }
+
+      const converted96 = await resizeStaticEmoji(buffer, 96);
+      if (converted96.length <= this.MAX_EMOJI_BYTES) {
+        return { buffer: converted96, animated: false, mimeType: "image/png" };
+      }
+
+      throw new Error("Görsel optimize edildikten sonra bile 256 KB sınırını aşıyor");
     }
 
     if (buffer.length <= 250 * 1024) {
-      return { buffer, animated: false };
+      if (isPngMagic(buffer)) {
+        return { buffer, animated: false, mimeType: "image/png" };
+      }
+      if (isJpegMagic(buffer)) {
+        return { buffer, animated: false, mimeType: "image/jpeg" };
+      }
     }
 
     const resized128 = await resizeStaticEmoji(buffer, 128);
     if (resized128.length <= this.MAX_EMOJI_BYTES) {
-      return { buffer: resized128, animated: false };
+      return { buffer: resized128, animated: false, mimeType: "image/png" };
     }
 
     const resized96 = await resizeStaticEmoji(buffer, 96);
     if (resized96.length <= this.MAX_EMOJI_BYTES) {
-      return { buffer: resized96, animated: false };
+      return { buffer: resized96, animated: false, mimeType: "image/png" };
     }
 
     throw new Error("Görsel optimize edildikten sonra bile 256 KB sınırını aşıyor");
@@ -539,7 +605,7 @@ export class VedoEmojiUploader {
   public static async prepareImageBuffer(
     url: string,
     hintedAnimated: boolean
-  ): Promise<{ buffer: Buffer; animated: boolean }> {
+  ): Promise<{ buffer: Buffer; animated: boolean; mimeType: "image/png" | "image/jpeg" | "image/gif" }> {
     if (!this.isSafeExternalUrl(url)) {
       throw new Error("Geçersiz veya güvensiz görsel bağlantısı");
     }
@@ -573,10 +639,15 @@ export class VedoEmojiUploader {
   public static async uploadBatch(
     guild: Guild,
     candidates: IVedoEmojiCandidate[],
-    truncatedCount: number
+    truncatedCount: number,
+    onProgress?: (progress: IVedoEmojiProgress) => Promise<void> | void
   ): Promise<IVedoEmojiBatchResult> {
     const startedAt = Date.now();
-    const existing = await guild.emojis.fetch();
+    const existing = await withTimeout(
+      guild.emojis.fetch(),
+      15000,
+      "Sunucu emojileri alınırken zaman aşımı oluştu"
+    );
     const maxLimit = this.getGuildEmojiLimit(guild.premiumTier);
     const usedNamesLower = new Set<string>();
     let staticUsed = 0;
@@ -598,41 +669,68 @@ export class VedoEmojiUploader {
 
     const succeeded: IVedoEmojiUploadSuccess[] = [];
     const failed: IVedoEmojiUploadFailure[] = [];
-    let nextIndex = 0;
+    let rateLimitWaitMs = 0;
+    let lastProgressAt = 0;
 
-    const createWithRetry = async (buffer: Buffer, uniqueName: string) => {
-      try {
-        return await guild.emojis.create({
-          attachment: buffer,
-          name: uniqueName,
-          reason: "VedoGuard Toplu Emoji Yükleme"
-        });
-      } catch (firstErr: any) {
-        const status = firstErr?.status;
-        const retryAfterMs = Number(firstErr?.retryAfter || firstErr?.data?.retry_after || 0) * 1000;
-        const shouldRetry = status === 429 || status >= 500 || firstErr?.code === "ECONNRESET";
-        if (!shouldRetry) {
-          throw firstErr;
+    const emitProgress = async (
+      processed: number,
+      statusNote?: string,
+      force: boolean = false
+    ): Promise<void> => {
+      if (!onProgress) {
+        return;
+      }
+      if (!force && processed > 1 && Date.now() - lastProgressAt < 2000) {
+        return;
+      }
+      lastProgressAt = Date.now();
+      await Promise.resolve(
+        onProgress({
+          processed,
+          total: candidates.length,
+          succeeded: succeeded.length,
+          failed: failed.length,
+          statusNote
+        })
+      ).catch(() => {});
+    };
+
+    const restClient = guild.client?.rest;
+    const onRestRateLimited = (info: any) => {
+      if (typeof info?.route === "string" && info.route.includes("/emojis")) {
+        const waitMs = Math.max(
+          Number(info.timeToReset || 0),
+          Number(info.retryAfter || 0),
+          Number(info.sublimitTimeout || 0)
+        );
+        if (waitMs > 0 && waitMs <= 15000) {
+          void emitProgress(
+            succeeded.length + failed.length,
+            `Discord hız sınırı bekleniyor (${formatWaitDuration(waitMs)})...`,
+            true
+          );
         }
-        await sleep(Math.min(3000, Math.max(600, retryAfterMs || 800)));
-        return await guild.emojis.create({
-          attachment: buffer,
-          name: uniqueName,
-          reason: "VedoGuard Toplu Emoji Yükleme"
-        });
       }
     };
 
-    const runWorker = async (): Promise<void> => {
-      while (nextIndex < candidates.length) {
-        const currentIdx = nextIndex;
-        nextIndex += 1;
-        const candidate = candidates[currentIdx];
+    if (restClient && typeof restClient.on === "function") {
+      restClient.on("rateLimited", onRestRateLimited);
+    }
 
-        let prepared: { buffer: Buffer; animated: boolean };
+    try {
+      for (let i = 0; i < candidates.length; i += 1) {
+        const candidate = candidates[i];
+        const rawBuffer = candidate.buffer;
+        candidate.buffer = undefined;
+
+        let prepared: {
+          buffer: Buffer;
+          animated: boolean;
+          mimeType: "image/png" | "image/jpeg" | "image/gif";
+        };
         try {
-          if (candidate.buffer) {
-            prepared = await this.optimizeImageBuffer(candidate.buffer, candidate.animated);
+          if (rawBuffer) {
+            prepared = await this.optimizeImageBuffer(rawBuffer, candidate.animated);
           } else if (candidate.url) {
             prepared = await this.prepareImageBuffer(candidate.url, candidate.animated);
           } else {
@@ -643,6 +741,7 @@ export class VedoEmojiUploader {
             name: candidate.name,
             reason: formatUploadError(prepErr)
           });
+          await emitProgress(i + 1);
           continue;
         }
 
@@ -654,6 +753,7 @@ export class VedoEmojiUploader {
               ? "Sunucu hareketli emoji kapasitesi dolu"
               : "Sunucu statik emoji kapasitesi dolu"
           });
+          await emitProgress(i + 1);
           continue;
         }
 
@@ -664,9 +764,18 @@ export class VedoEmojiUploader {
         }
 
         const uniqueName = this.resolveUniqueName(candidate.name, usedNamesLower);
+        const dataUri = `data:${prepared.mimeType};base64,${prepared.buffer.toString("base64")}`;
 
         try {
-          const created = await createWithRetry(prepared.buffer, uniqueName);
+          const created = await withTimeout(
+            guild.emojis.create({
+              attachment: dataUri,
+              name: uniqueName,
+              reason: "VedoGuard Toplu Emoji Yükleme"
+            }),
+            25000,
+            "Emoji yükleme isteği zaman aşımına uğradı"
+          );
           if (prepared.animated) {
             animatedUsed += 1;
           } else {
@@ -678,30 +787,57 @@ export class VedoEmojiUploader {
             animated: Boolean(created.animated),
             tag: created.toString()
           });
-        } catch (uploadErr) {
+          await emitProgress(i + 1, undefined, i === 0);
+        } catch (uploadErr: any) {
           if (prepared.animated) {
             animatedRemaining += 1;
           } else {
             staticRemaining += 1;
           }
+          console.error(
+            "[VedoEmojiUploader]",
+            uniqueName,
+            uploadErr?.name || uploadErr?.code || "",
+            uploadErr?.message || uploadErr
+          );
+
+          if (isRateLimitError(uploadErr)) {
+            const waitMs = Math.max(15000, extractRateLimitWaitMs(uploadErr));
+            rateLimitWaitMs = waitMs;
+            const waitText = formatWaitDuration(waitMs);
+            failed.push({
+              name: uniqueName,
+              reason: `Discord hız sınırı (${waitText} bekleme)`
+            });
+            const remainingCount = candidates.length - (i + 1);
+            if (remainingCount > 0) {
+              failed.push({
+                name: `+${remainingCount} emoji`,
+                reason: `Discord hız sınırı nedeniyle durduruldu (${waitText})`
+              });
+            }
+            break;
+          }
+
+          if (uploadErr?.code === 30008) {
+            if (prepared.animated) {
+              animatedRemaining = 0;
+            } else {
+              staticRemaining = 0;
+            }
+          }
           failed.push({
             name: uniqueName,
             reason: formatUploadError(uploadErr)
           });
-        }
-
-        if (nextIndex < candidates.length) {
-          await sleep(150);
+          await emitProgress(i + 1, undefined, i === 0);
         }
       }
-    };
-
-    const workerCount = Math.min(2, candidates.length);
-    const workers: Promise<void>[] = [];
-    for (let i = 0; i < workerCount; i++) {
-      workers.push(runWorker());
+    } finally {
+      if (restClient && typeof restClient.off === "function") {
+        restClient.off("rateLimited", onRestRateLimited);
+      }
     }
-    await Promise.all(workers);
 
     return {
       succeeded,
@@ -710,7 +846,8 @@ export class VedoEmojiUploader {
       maxLimit,
       staticUsed,
       animatedUsed,
-      durationMs: Date.now() - startedAt
+      durationMs: Date.now() - startedAt,
+      rateLimitWaitMs
     };
   }
 
@@ -761,8 +898,24 @@ export class VedoEmojiUploader {
         : "";
     lines.push(`${durationPart}${truncatedPart}`);
 
+    if (result.rateLimitWaitMs && result.rateLimitWaitMs > 0) {
+      lines.push(
+        `› **Discord Hız Sınırı:** \`${formatWaitDuration(result.rateLimitWaitMs)}\` bekleme gerektiği için kalan emojiler durduruldu.`
+      );
+    }
+
     if (result.succeeded.length > 0) {
-      lines.push(`› **Yüklenen Emojiler:** ${result.succeeded.map((e) => e.tag).join(" ")}`);
+      const renderedTags: string[] = [];
+      let totalTagLen = 0;
+      for (const emoji of result.succeeded) {
+        if (totalTagLen + emoji.tag.length + 1 > 2800) {
+          renderedTags.push(`... (+${result.succeeded.length - renderedTags.length})`);
+          break;
+        }
+        renderedTags.push(emoji.tag);
+        totalTagLen += emoji.tag.length + 1;
+      }
+      lines.push(`› **Yüklenen Emojiler:** ${renderedTags.join(" ")}`);
     }
 
     if (result.failed.length > 0) {

@@ -12,6 +12,11 @@ const SAMPLE_GIF = Buffer.from(
   "hex"
 );
 
+const SAMPLE_WEBP = Buffer.from(
+  "524946461a000000574542505650384c0d0000002f00000010071011118888fe0700",
+  "hex"
+);
+
 function createTestZip(
   entries: Array<{ name: string; data: Buffer; compress?: boolean }>
 ): Buffer {
@@ -177,21 +182,31 @@ describe("VedoEmojiUploader Unit Tests", () => {
     await expect(VedoEmojiUploader.parseAttachmentFile(rarAttachment)).rejects.toThrow(/RAR.*\.zip/i);
   });
 
-  it("should upload Buffer-backed candidates sequentially as querencia and querencia_2 without fetch", async () => {
+  it("should upload Buffer-backed PNG, GIF, and converted WEBP sequentially with exact Data URI MIME types and progress", async () => {
     const createdNames: string[] = [];
+    const attachmentsPassed: string[] = [];
+    const progressUpdates: Array<{
+      processed: number;
+      total: number;
+      succeeded: number;
+      failed: number;
+    }> = [];
     let nextEmojiId = 1001;
+
     const mockGuild = {
       premiumTier: GuildPremiumTier.None,
       emojis: {
         fetch: jest.fn().mockResolvedValue(new Map()),
-        create: jest.fn().mockImplementation(async ({ name }: { name: string }) => {
+        create: jest.fn().mockImplementation(async ({ attachment, name }: { attachment: string; name: string }) => {
           createdNames.push(name);
+          attachmentsPassed.push(attachment);
           const id = String(nextEmojiId++);
+          const isGif = attachment.startsWith("data:image/gif;base64,");
           return {
             name,
             id,
-            animated: false,
-            toString: () => `<:${name}:${id}>`
+            animated: isGif,
+            toString: () => `<${isGif ? "a" : ""}:${name}:${id}>`
           };
         })
       }
@@ -203,18 +218,92 @@ describe("VedoEmojiUploader Unit Tests", () => {
         mockGuild,
         [
           { name: "querencia", buffer: SAMPLE_PNG, animated: false },
+          { name: "querencia", buffer: SAMPLE_GIF, animated: true },
+          { name: "querencia", buffer: SAMPLE_WEBP, animated: false }
+        ],
+        0,
+        (progress) => {
+          progressUpdates.push({
+            processed: progress.processed,
+            total: progress.total,
+            succeeded: progress.succeeded,
+            failed: progress.failed
+          });
+        }
+      );
+
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(result.succeeded.length).toBe(3);
+      expect(result.failed.length).toBe(0);
+      expect(createdNames).toEqual(["querencia", "querencia_2", "querencia_3"]);
+      expect(result.succeeded.map((e) => e.name)).toEqual(["querencia", "querencia_2", "querencia_3"]);
+      expect(attachmentsPassed[0].startsWith("data:image/png;base64,")).toBe(true);
+      expect(attachmentsPassed[1].startsWith("data:image/gif;base64,")).toBe(true);
+      expect(attachmentsPassed[2].startsWith("data:image/png;base64,")).toBe(true);
+      expect(progressUpdates.length).toBeGreaterThanOrEqual(1);
+      expect(progressUpdates[0]).toEqual({
+        processed: 1,
+        total: 3,
+        succeeded: 1,
+        failed: 0
+      });
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("should abort cleanly on RateLimitError without hanging and report wait duration", async () => {
+    let callCount = 0;
+    const createMock = jest.fn().mockImplementation(async ({ name }: { name: string }) => {
+      callCount += 1;
+      if (callCount === 1) {
+        return {
+          name,
+          id: "1001",
+          animated: false,
+          toString: () => `<:${name}:1001>`
+        };
+      }
+      throw {
+        name: "RateLimitError[/guilds/:id/emojis]",
+        message: "Rate limit exceeded",
+        timeToReset: 600000,
+        retryAfter: 600000,
+        sublimitTimeout: 0
+      };
+    });
+
+    const mockGuild = {
+      premiumTier: GuildPremiumTier.None,
+      emojis: {
+        fetch: jest.fn().mockResolvedValue(new Map()),
+        create: createMock
+      }
+    } as unknown as Guild;
+
+    const consoleSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const result = await VedoEmojiUploader.uploadBatch(
+        mockGuild,
+        [
+          { name: "querencia", buffer: SAMPLE_PNG, animated: false },
+          { name: "querencia", buffer: SAMPLE_PNG, animated: false },
           { name: "querencia", buffer: SAMPLE_PNG, animated: false }
         ],
         0
       );
 
-      expect(fetchSpy).not.toHaveBeenCalled();
-      expect(result.succeeded.length).toBe(2);
-      expect(result.failed.length).toBe(0);
-      expect(createdNames).toEqual(["querencia", "querencia_2"]);
-      expect(result.succeeded.map((e) => e.name)).toEqual(["querencia", "querencia_2"]);
+      expect(createMock).toHaveBeenCalledTimes(2);
+      expect(result.succeeded.length).toBe(1);
+      expect(result.rateLimitWaitMs).toBe(600000);
+      expect(result.failed.some((f) => f.reason.includes("10 dk"))).toBe(true);
+
+      const container = await VedoEmojiUploader.buildResultContainer(null, result);
+      const reply = container.toReply();
+      const serialized = JSON.stringify(reply.components[0].toJSON());
+      expect(serialized).toContain("10 dk");
     } finally {
-      fetchSpy.mockRestore();
+      consoleSpy.mockRestore();
     }
   });
 

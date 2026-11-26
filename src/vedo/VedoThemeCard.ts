@@ -580,7 +580,7 @@ export class VedoThemeCard {
     ctx.font = `11px ${VEDO_FONT_FAMILY}`;
     ctx.fillStyle = "rgba(148, 163, 184, 0.6)";
     ctx.textAlign = "left";
-    ctx.fillText(options.footerLeft || "QUERENCIA  •  VEDOGUARD", paddingX, height - 14);
+    ctx.fillText(options.footerLeft || "NozGuard", paddingX, height - 14);
 
     ctx.fillStyle = "rgba(212, 175, 55, 0.78)";
     ctx.textAlign = "right";

@@ -22,6 +22,35 @@ export interface IVedoTicketConfig {
   unregisteredRoleId?: string;
 }
 
+function formatTicketError(error: any): string {
+  const code = error?.code;
+  if (code === 50013) {
+    return "Botun sunucuda gerekli yetkisi eksik (Kanalları Yönet / Dosya Ekle).";
+  }
+  if (code === 30013) {
+    return "Mülakat kategorisi 50 kanal sınırına ulaşmış.";
+  }
+  if (code === 50035) {
+    return "Mülakat kanalı veya kategori bilgisi geçersiz.";
+  }
+  const msg = String(error?.message || "Mülakat odası oluşturulurken beklenmeyen bir hata oluştu.");
+  return msg.length > 140 ? `${msg.slice(0, 137)}...` : msg;
+}
+
+function withTicketTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(message));
+    }, ms);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+  });
+}
+
 export class VedoTicketManager {
   private client: Client;
   private config: IVedoTicketConfig;
@@ -173,12 +202,6 @@ export class VedoTicketManager {
     const guild = interaction.guild;
     const user = interaction.user;
 
-    const oocName = interaction.fields.getTextInputValue("vedo_ticket_field_name");
-    const oocAge = interaction.fields.getTextInputValue("vedo_ticket_field_age");
-    const primeHours = interaction.fields.getTextInputValue("vedo_ticket_field_hours");
-    const strikeAccept = interaction.fields.getTextInputValue("vedo_ticket_field_strike");
-    const kda = interaction.fields.getTextInputValue("vedo_ticket_field_kda");
-
     try {
       if (!interaction.replied && !interaction.deferred) {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -187,138 +210,263 @@ export class VedoTicketManager {
       return;
     }
 
-    const permissionOverwrites: any[] = [
-      {
-        id: guild.id,
-        deny: [PermissionsBitField.Flags.ViewChannel]
-      },
-      {
-        id: user.id,
-        allow: [
-          PermissionsBitField.Flags.ViewChannel,
-          PermissionsBitField.Flags.SendMessages,
-          PermissionsBitField.Flags.ReadMessageHistory,
-          PermissionsBitField.Flags.AttachFiles
-        ]
-      },
-      {
-        id: this.client.user!.id,
-        allow: [
-          PermissionsBitField.Flags.ViewChannel,
-          PermissionsBitField.Flags.SendMessages,
-          PermissionsBitField.Flags.ManageChannels,
-          PermissionsBitField.Flags.ReadMessageHistory
-        ]
+    const sendEphemeralResult = async (container: VedoContainerBuilder): Promise<void> => {
+      try {
+        await interaction.editReply(container.toEditReply());
+      } catch (editErr) {
+        console.error("[VedoTicketManager] editReply hatası:", editErr);
+        try {
+          await interaction.followUp(container.toEphemeralReply());
+        } catch (followErr) {
+          console.error("[VedoTicketManager] followUp hatası:", followErr);
+        }
       }
-    ];
-
-    if (this.config.staffRoleId && guild.roles.cache.has(this.config.staffRoleId)) {
-      permissionOverwrites.push({
-        id: this.config.staffRoleId,
-        allow: [
-          PermissionsBitField.Flags.ViewChannel,
-          PermissionsBitField.Flags.SendMessages,
-          PermissionsBitField.Flags.ReadMessageHistory
-        ]
-      });
-    }
-
-    const channelName = `mulakat-${user.username.toLowerCase().replace(/[^a-z0-9]/g, "")}`;
-    const ticketChannel = await guild.channels.create({
-      name: channelName,
-      type: ChannelType.GuildText,
-      parent: this.config.ticketCategoryId || undefined,
-      permissionOverwrites
-    });
-
-    const cardBuffer = await VedoThemeCard.generate({
-      title: "YENİ MÜLAKAT BAŞVURUSU",
-      greeting: "Aday Başvuru Dosyası,",
-      subtitle: "Adayın ilettiği form yanıtları aşağıdadır. Ekibinizle değerlendirip kararınızı veriniz.",
-      accentColor: "#D4AF37",
-      watermark: "QUERENCIA",
-      iconUrl: guild.iconURL({ extension: "png", size: 128 }) || undefined,
-      columns: 3,
-      items: [
-        {
-          icon: "user",
-          title: "Aday",
-          description: user.tag
-        },
-        {
-          icon: "file",
-          title: "OOC İsim",
-          description: oocName
-        },
-        {
-          icon: "clock",
-          title: "OOC Yaş",
-          description: oocAge
-        },
-        {
-          icon: "bell",
-          title: "Prime Saatler (20.00 - 12.00)",
-          description: primeHours
-        },
-        {
-          icon: "alert",
-          title: "3 Strike Kuralı",
-          description: strikeAccept
-        },
-        {
-          icon: "target",
-          title: "K/DA",
-          description: kda
-        }
-      ]
-    });
-
-    const staffMention = this.config.staffRoleId ? `<@&${this.config.staffRoleId}>` : "Yetkililer";
-    const ticketContainer = new VedoContainerBuilder()
-      .setHeaderNotice(`${staffMention} <@${user.id}>`)
-      .setAccentColor(VEDO_THEME_COLORS.gold)
-      .setImageBuffer(cardBuffer, "vedo-basvuru-karti.png")
-      .addTextDisplay(
-        `› **Aday:** <@${user.id}>  •  **Tarih:** <t:${Math.floor(Date.now() / 1000)}:R>`
-      )
-      .addSeparator(true, 1)
-      .addActionRow([
-        {
-          type: 2,
-          style: 3,
-          label: "Kabul Et",
-          custom_id: `vedo_ticket_approve_${user.id}`
-        },
-        {
-          type: 2,
-          style: 4,
-          label: "Reddet",
-          custom_id: `vedo_ticket_reject_${user.id}`
-        },
-        {
-          type: 2,
-          style: 2,
-          label: "Odayı Sil",
-          custom_id: "vedo_ticket_close_btn"
-        }
-      ])
-      .setFooter("Made by Noz");
-
-    await ticketChannel.send(ticketContainer.toReply());
-
-    const replyContainer = new VedoContainerBuilder()
-      .setAccentColor(VEDO_THEME_COLORS.success)
-      .addTextDisplay(
-        `### Başvurunuz Alındı\n` +
-        `› **Mülakat Odanız:** <#${ticketChannel.id}>\n` +
-        `› *Yetkililerimiz en kısa sürede odanızda sizinle iletişime geçecektir.*`
-      )
-      .addSeparator(true, 1)
-      .setFooter("Made by Noz");
+    };
 
     try {
-      await interaction.editReply(replyContainer.toEditReply());
-    } catch {}
+      const oocName = interaction.fields.getTextInputValue("vedo_ticket_field_name");
+      const oocAge = interaction.fields.getTextInputValue("vedo_ticket_field_age");
+      const primeHours = interaction.fields.getTextInputValue("vedo_ticket_field_hours");
+      const strikeAccept = interaction.fields.getTextInputValue("vedo_ticket_field_strike");
+      const kda = interaction.fields.getTextInputValue("vedo_ticket_field_kda");
+
+      const botMember = guild.members?.me;
+      if (botMember && !botMember.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
+        const permErr = new VedoContainerBuilder()
+          .setAccentColor(VEDO_THEME_COLORS.danger)
+          .addTextDisplay(
+            `### Yetki Eksik\n` +
+            `› *Botun mülakat odası açabilmesi için 'Kanalları Yönet' yetkisine sahip olması gerekir.*`
+          )
+          .setFooter("Made by Noz");
+        await sendEphemeralResult(permErr);
+        return;
+      }
+
+      const permissionOverwrites: any[] = [
+        {
+          id: guild.id,
+          deny: [PermissionsBitField.Flags.ViewChannel]
+        },
+        {
+          id: user.id,
+          allow: [
+            PermissionsBitField.Flags.ViewChannel,
+            PermissionsBitField.Flags.SendMessages,
+            PermissionsBitField.Flags.ReadMessageHistory,
+            PermissionsBitField.Flags.AttachFiles
+          ]
+        }
+      ];
+
+      const botId = this.client.user?.id || botMember?.id;
+      if (botId) {
+        permissionOverwrites.push({
+          id: botId,
+          allow: [
+            PermissionsBitField.Flags.ViewChannel,
+            PermissionsBitField.Flags.SendMessages,
+            PermissionsBitField.Flags.ManageChannels,
+            PermissionsBitField.Flags.ReadMessageHistory,
+            PermissionsBitField.Flags.AttachFiles,
+            PermissionsBitField.Flags.EmbedLinks
+          ]
+        });
+      }
+
+      if (
+        this.config.staffRoleId &&
+        this.config.staffRoleId !== guild.id &&
+        guild.roles.cache.has(this.config.staffRoleId)
+      ) {
+        permissionOverwrites.push({
+          id: this.config.staffRoleId,
+          allow: [
+            PermissionsBitField.Flags.ViewChannel,
+            PermissionsBitField.Flags.SendMessages,
+            PermissionsBitField.Flags.ReadMessageHistory,
+            PermissionsBitField.Flags.AttachFiles
+          ]
+        });
+      }
+
+      const rawSlug = user.username
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "")
+        .slice(0, 24);
+      const channelName = `mulakat-${rawSlug || user.id.slice(-6)}`;
+
+      let validParentId: string | undefined;
+      if (this.config.ticketCategoryId) {
+        let category = guild.channels.cache.get(this.config.ticketCategoryId) || null;
+        if (!category && typeof guild.channels.fetch === "function") {
+          category = await guild.channels.fetch(this.config.ticketCategoryId).catch(() => null);
+        }
+        if (category && category.type === ChannelType.GuildCategory) {
+          validParentId = category.id;
+        }
+      }
+
+      let ticketChannel: any;
+      try {
+        ticketChannel = await withTicketTimeout(
+          guild.channels.create({
+            name: channelName,
+            type: ChannelType.GuildText,
+            parent: validParentId,
+            permissionOverwrites
+          }),
+          15000,
+          "Mülakat odası oluşturulurken zaman aşımı oluştu"
+        );
+      } catch (createErr: any) {
+        if (!validParentId || createErr?.code === 50013) {
+          throw createErr;
+        }
+        console.warn(
+          "[VedoTicketManager] Kategori içinde oda açılamadı, kategorisiz deneniyor:",
+          createErr?.code || createErr?.message
+        );
+        ticketChannel = await withTicketTimeout(
+          guild.channels.create({
+            name: channelName,
+            type: ChannelType.GuildText,
+            permissionOverwrites
+          }),
+          15000,
+          "Mülakat odası oluşturulurken zaman aşımı oluştu"
+        );
+      }
+
+      let cardBuffer: Buffer | null = null;
+      try {
+        cardBuffer = await VedoThemeCard.generate({
+          title: "YENİ MÜLAKAT BAŞVURUSU",
+          greeting: "Aday Başvuru Dosyası,",
+          subtitle: "Adayın ilettiği form yanıtları aşağıdadır. Ekibinizle değerlendirip kararınızı veriniz.",
+          accentColor: "#D4AF37",
+          watermark: "QUERENCIA",
+          iconUrl: guild.iconURL({ extension: "png", size: 128 }) || undefined,
+          columns: 3,
+          items: [
+            {
+              icon: "user",
+              title: "Aday",
+              description: user.tag
+            },
+            {
+              icon: "file",
+              title: "OOC İsim",
+              description: oocName
+            },
+            {
+              icon: "clock",
+              title: "OOC Yaş",
+              description: oocAge
+            },
+            {
+              icon: "bell",
+              title: "Prime Saatler (20.00 - 12.00)",
+              description: primeHours
+            },
+            {
+              icon: "alert",
+              title: "3 Strike Kuralı",
+              description: strikeAccept
+            },
+            {
+              icon: "target",
+              title: "K/DA",
+              description: kda
+            }
+          ]
+        });
+      } catch (cardErr) {
+        console.error("[VedoTicketManager] Başvuru kartı oluşturulamadı:", cardErr);
+      }
+
+      const staffMention = this.config.staffRoleId ? `<@&${this.config.staffRoleId}>` : "Yetkililer";
+      const buildTicketContainer = (includeImage: boolean): VedoContainerBuilder => {
+        const builder = new VedoContainerBuilder()
+          .setHeaderNotice(`${staffMention} <@${user.id}>`)
+          .setAccentColor(VEDO_THEME_COLORS.gold);
+
+        if (includeImage && cardBuffer) {
+          builder
+            .setImageBuffer(cardBuffer, "vedo-basvuru-karti.png")
+            .addTextDisplay(
+              `› **Aday:** <@${user.id}>  •  **Tarih:** <t:${Math.floor(Date.now() / 1000)}:R>`
+            );
+        } else {
+          builder.addTextDisplay(
+            `### Yeni Mülakat Başvurusu\n` +
+            `› **Aday:** <@${user.id}> (\`${user.tag}\`)\n` +
+            `› **OOC İsim:** \`${oocName}\`  •  **OOC Yaş:** \`${oocAge}\`\n` +
+            `› **Prime Saatler:** \`${primeHours}\`  •  **3 Strike:** \`${strikeAccept}\`\n` +
+            `› **K/DA:** \`${kda}\`  •  **Tarih:** <t:${Math.floor(Date.now() / 1000)}:R>`
+          );
+        }
+
+        return builder
+          .addSeparator(true, 1)
+          .addActionRow([
+            {
+              type: 2,
+              style: 3,
+              label: "Kabul Et",
+              custom_id: `vedo_ticket_approve_${user.id}`
+            },
+            {
+              type: 2,
+              style: 4,
+              label: "Reddet",
+              custom_id: `vedo_ticket_reject_${user.id}`
+            },
+            {
+              type: 2,
+              style: 2,
+              label: "Odayı Sil",
+              custom_id: "vedo_ticket_close_btn"
+            }
+          ])
+          .setFooter("Made by Noz");
+      };
+
+      const primaryContainer = buildTicketContainer(Boolean(cardBuffer));
+      try {
+        await ticketChannel.send(primaryContainer.toReply());
+      } catch (sendErr) {
+        console.error("[VedoTicketManager] Görselli kart gönderilemedi, metin moduna geçiliyor:", sendErr);
+        if (cardBuffer) {
+          await ticketChannel.send(buildTicketContainer(false).toReply());
+        } else {
+          throw sendErr;
+        }
+      }
+
+      const replyContainer = new VedoContainerBuilder()
+        .setAccentColor(VEDO_THEME_COLORS.success)
+        .addTextDisplay(
+          `### Başvurunuz Alındı\n` +
+          `› **Mülakat Odanız:** <#${ticketChannel.id}>\n` +
+          `› *Yetkililerimiz en kısa sürede odanızda sizinle iletişime geçecektir.*`
+        )
+        .addSeparator(true, 1)
+        .setFooter("Made by Noz");
+
+      await sendEphemeralResult(replyContainer);
+    } catch (error: any) {
+      console.error("[VedoTicketManager] Mülakat başvurusu işlenemedi:", error);
+      const errContainer = new VedoContainerBuilder()
+        .setAccentColor(VEDO_THEME_COLORS.danger)
+        .addTextDisplay(
+          `### Başvuru İşlenemedi\n` +
+          `› **Detay:** ${formatTicketError(error)}\n` +
+          `› *Lütfen bir sunucu yetkilisi ile iletişime geçiniz.*`
+        )
+        .setFooter("Made by Noz");
+      await sendEphemeralResult(errContainer);
+    }
   }
 
   public async handleButtonInteraction(interaction: ButtonInteraction): Promise<void> {
@@ -373,6 +521,14 @@ export class VedoTicketManager {
     }
 
     if (interaction.customId.startsWith("vedo_ticket_approve_")) {
+      try {
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.deferReply();
+        }
+      } catch {
+        return;
+      }
+
       const targetUserId = interaction.customId.replace("vedo_ticket_approve_", "");
       const targetMember = await interaction.guild.members.fetch(targetUserId).catch(() => null);
 
@@ -401,16 +557,22 @@ export class VedoTicketManager {
         .setFooter("Made by Noz");
 
       try {
-        if (!interaction.replied && !interaction.deferred) {
-          await interaction.reply(approveContainer.toReply());
-        } else {
-          await interaction.followUp(approveContainer.toReply());
-        }
-      } catch {}
+        await interaction.editReply(approveContainer.toEditReply());
+      } catch {
+        await interaction.followUp(approveContainer.toReply()).catch(() => {});
+      }
       return;
     }
 
     if (interaction.customId.startsWith("vedo_ticket_reject_")) {
+      try {
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.deferReply();
+        }
+      } catch {
+        return;
+      }
+
       const targetUserId = interaction.customId.replace("vedo_ticket_reject_", "");
 
       const rejectContainer = new VedoContainerBuilder()
@@ -426,12 +588,10 @@ export class VedoTicketManager {
         .setFooter("Made by Noz");
 
       try {
-        if (!interaction.replied && !interaction.deferred) {
-          await interaction.reply(rejectContainer.toReply());
-        } else {
-          await interaction.followUp(rejectContainer.toReply());
-        }
-      } catch {}
+        await interaction.editReply(rejectContainer.toEditReply());
+      } catch {
+        await interaction.followUp(rejectContainer.toReply()).catch(() => {});
+      }
       return;
     }
   }

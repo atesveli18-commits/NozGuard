@@ -1845,8 +1845,24 @@ export class VedoGuardBot {
             return;
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("[VedoGuard] Etkileşim hatası yakalandı:", error);
+        if (interaction.isRepliable()) {
+          const errContainer = new VedoContainerBuilder()
+            .setAccentColor(VEDO_THEME_COLORS.danger)
+            .addTextDisplay(
+              `### İşlem Tamamlanamadı\n` +
+              `› **Detay:** ${error?.message || "Beklenmeyen bir hata oluştu."}`
+            )
+            .setFooter("Made by Noz");
+          try {
+            if (interaction.deferred || interaction.replied) {
+              await interaction.editReply(errContainer.toEditReply());
+            } else {
+              await interaction.reply(errContainer.toEphemeralReply());
+            }
+          } catch {}
+        }
       }
     });
   }
